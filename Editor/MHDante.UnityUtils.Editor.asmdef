@@ -1,0 +1,18 @@
+{
+    "name": "MHDante.UnityUtils.Editor",
+    "rootNamespace": "MHDante.UnityUtils.Editor",
+    "references": [
+        "GUID:5b6b2ce991c96964ab56dff314ecb2e0"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

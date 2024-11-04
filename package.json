@@ -1,0 +1,17 @@
+{
+    "name": "com.mhdante.unity-utils",
+    "version": "1.0.0",
+    "displayName": "MHDante's Unity Utilities",
+    "description": "A collection of shorthands and hacks. Meant to be used with Odin Inspector",
+    "unity": "6000.0",
+    "unityRelease": "13f1",
+    "documentationUrl": "https://github.com/MHDante/UnityUtils",
+    "dependencies": {
+   },
+   "keywords": [],
+    "author": {
+      "name": "MHDante",
+      "email": "hello@mhdante.com",
+      "url": "https://mhdante.com"
+    }
+  }

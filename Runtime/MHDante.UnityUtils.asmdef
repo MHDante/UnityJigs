@@ -1,0 +1,14 @@
+{
+    "name": "MHDante.UnityUtils",
+    "rootNamespace": "MHDante.UnityUtils",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
