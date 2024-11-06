@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
@@ -41,18 +42,34 @@ namespace MHDante.UnityUtils
         public static Vector2 XZ(this Vector3 v) => new(v.x, v.z);
         public static Vector3 X_Z(this Vector2 v, float y = 0) => new(v.x, y, v.y);
 
-        public static Vector3 Divide(this Vector3 a, Vector3 b) => new(a.x/b.x, a.y/b.y, a.z/b.z);
-        public static Vector3 Multiply(this Vector3 a, Vector3 b) => new(a.x*b.x, a.y*b.y, a.z*b.z);
+        public static Vector3 Divide(this Vector3 a, Vector3 b) => new(a.x / b.x, a.y / b.y, a.z / b.z);
+        public static Vector3 Multiply(this Vector3 a, Vector3 b) => new(a.x * b.x, a.y * b.y, a.z * b.z);
+        public static Color WithAlpha(this Color c, float a) => new(c.r, c.g, c.b, a);
 
         public static float Clamp01(this float t) => Mathf.Clamp01(t);
+
+        public static T GetSaveData<T>(ref T? singletonField, string fileName) where T : class, new()
+        {
+            if (singletonField != null) return singletonField;
+            var path = Path.Combine(Application.persistentDataPath, fileName + ".json");
+            if (!File.Exists(path)) return singletonField = new T();
+            var json = File.ReadAllText(path);
+            return singletonField = JsonUtility.FromJson<T>(json);
+        }
+
+        public static void SaveData<T>(T data, string fileName)
+        {
+            var path = Path.Combine(Application.persistentDataPath, fileName + ".json");
+            var json = JsonUtility.ToJson(data);
+            File.WriteAllText(path, json);
+        }
 
         public static T GetPreloadedSingleton<T>(ref T singletonField) where T : Object
         {
 #if UNITY_EDITOR
             if (singletonField) return singletonField;
-            var candidate = UnityEditor.PlayerSettings.GetPreloadedAssets().OfType<T>().FirstOrDefault();
-            if (candidate == null)
-                throw new FileNotFoundException("Could Not Find object of type T in Preloaded Assets");
+            var candidate = PlayerSettings.GetPreloadedAssets().OfType<T>().First();
+            if (!candidate) throw new FileNotFoundException($"Could Not Find object of type T in Preloaded Assets");
             singletonField = candidate;
 #endif
             return singletonField;
@@ -84,6 +101,7 @@ namespace MHDante.UnityUtils
             return gradient;
         }
 
+        public static int GetAlternatingSign(int index) => index % 2 == 0 ? 1 : -1;
 
         public static bool HasParameter(this Animator animator, int id)
         {
@@ -98,6 +116,7 @@ namespace MHDante.UnityUtils
 
             return found;
         }
+
 
         public static float NearClipSize(this Camera camera) => NearClipSize(camera.fieldOfView, camera.nearClipPlane);
         public static float NearClipSize(float fov, float nearPlane) => Mathf.Tan(fov * .5f) * nearPlane;
@@ -147,6 +166,8 @@ namespace MHDante.UnityUtils
             return ray.GetPoint(dist);
         }
 
-
+        public static T? SafeNull<T>(this T? source) where T : Object =>
+            // ReSharper disable once MergeConditionalExpression
+            ReferenceEquals(source, null) ? null : source;
     }
 }

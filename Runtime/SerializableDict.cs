@@ -9,7 +9,8 @@ namespace MHDante.UnityUtils
     [Serializable]
     public class SerializedDict<TKey, TValue> : IDictionary<TKey, TValue>, ISerializationCallbackReceiver
     {
-        private IDictionary<TKey, TValue> _dictionary = new Dictionary<TKey, TValue>();
+        private Dictionary<TKey, TValue> _dictionary = new();
+        private IDictionary<TKey, TValue> Dictionary => _dictionary;
         [SerializeField] private List<SerializedKvp> SerializedValue = new();
 
         public void OnBeforeSerialize()
@@ -48,8 +49,10 @@ namespace MHDante.UnityUtils
             set => _dictionary[key] = value;
         }
 
-        public ICollection<TKey> Keys => _dictionary.Keys;
-        public ICollection<TValue> Values => _dictionary.Values;
+        ICollection<TKey> IDictionary<TKey, TValue>.Keys => _dictionary.Keys;
+        public Dictionary<TKey,TValue>.KeyCollection Keys => _dictionary.Keys;
+        ICollection<TValue> IDictionary<TKey, TValue>.Values => _dictionary.Values;
+        public Dictionary<TKey, TValue>.ValueCollection Values => _dictionary.Values;
         public int Count => _dictionary.Count;
         public bool IsReadOnly => false;
 
@@ -60,12 +63,15 @@ namespace MHDante.UnityUtils
         public bool TryGetValue(TKey key, out TValue value) => _dictionary.TryGetValue(key, out value);
         public void Add(KeyValuePair<TKey, TValue> item) => _dictionary.Add(item.Key, item.Value);
         public void Clear() => _dictionary.Clear();
-        public bool Contains(KeyValuePair<TKey, TValue> item) => _dictionary.Contains(item);
-        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) => _dictionary.CopyTo(array, arrayIndex);
+        public bool Contains(KeyValuePair<TKey, TValue> item) =>Dictionary.Contains(item);
+
+
+        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) => Dictionary.CopyTo(array, arrayIndex);
         public bool Remove(KeyValuePair<TKey, TValue> item) => _dictionary.Remove(item.Key);
 
         [MustDisposeResource]
-        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => _dictionary.GetEnumerator();
+        IEnumerator<KeyValuePair<TKey, TValue>> IEnumerable<KeyValuePair<TKey, TValue>>.GetEnumerator() => GetEnumerator();
+        public Dictionary<TKey, TValue>.Enumerator GetEnumerator() => _dictionary.GetEnumerator();
 
         [MustDisposeResource]
         IEnumerator IEnumerable.GetEnumerator() => _dictionary.GetEnumerator();

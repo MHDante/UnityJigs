@@ -21,7 +21,7 @@ namespace MHDante.UnityUtils
             if (id == 0) animator = null;
             else if (animator == null)
             {
-                if (!_hasLogged) Debug.LogWarning("Animator is null.", Animator);
+                if (!_hasLogged) Debug.LogWarning($"Animator is null: {this}", Animator);
                 animator = null;
             }
             else if (Application.isEditor && !_hasLogged && !animator.HasParameter(id))
@@ -73,7 +73,7 @@ namespace MHDante.UnityUtils
         public class Trigger : AnimatorParameter
         {
             public Trigger() : base(AnimatorControllerParameterType.Trigger) { }
-            public void Fire() => Check(Id)?.SetTrigger(Id);
+            public void Set() => Check(Id)?.SetTrigger(Id);
         }
     }
 

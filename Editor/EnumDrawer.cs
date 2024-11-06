@@ -29,7 +29,7 @@ namespace MHDante.UnityUtils.Editor
             return tree;
         }
 
-        [MenuItem("North Shore/Enums")]
+        [MenuItem("Pleasure Circuit/Enums")]
         private static void OpenWindow() => GetWindow<EnumDrawer>();
     }
 

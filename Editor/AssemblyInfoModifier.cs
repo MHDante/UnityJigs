@@ -32,7 +32,6 @@ namespace MHDante.UnityUtils.Editor
             var settings = AssemblyPeekerSettings.instance;
 
             var settingsPath = AssetDatabase.GetAssetPath(settings);
-            Debug.Log(settingsPath);
 
             if (assetPath == settingsPath) UpdateAllAssemblies(settings);
 
