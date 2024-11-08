@@ -22,8 +22,9 @@ namespace MHDante.UnityUtils.Editor.AssemblyPeeker
             foreach (var peekedAssembly in settings.PeekedAssemblies)
             {
                 if (peekedAssembly.Asmdef == null) continue;
-                var asmdefPath = assetPath;
-                UpdateAssembly(asmdefPath, peekedAssembly);
+                var peekedPath = AssetDatabase.GetAssetPath(peekedAssembly.Asmdef);
+                if(peekedPath!= assetPath) continue;
+                UpdateAssembly(peekedPath, peekedAssembly);
                 break;
             }
         }
