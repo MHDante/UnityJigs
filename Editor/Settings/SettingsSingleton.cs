@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace MHDante.UnityUtils.Editor.Settings
+namespace UnityUtils.Editor.Settings
 {
     public abstract class SettingsSingleton<T> :  ScriptableSingleton<T>, ISettingsSingleton where T : SettingsSingleton<T>
     {

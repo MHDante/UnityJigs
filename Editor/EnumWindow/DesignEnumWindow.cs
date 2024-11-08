@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Attributes;
 using Sirenix.OdinInspector.Editor;
 using UnityEditor;
+using UnityUtils.Attributes;
 
-namespace MHDante.UnityUtils.Editor.EnumWindow
+namespace UnityUtils.Editor.EnumWindow
 {
     [UsedImplicitly(ImplicitUseTargetFlags.Members)]
     public class DesignEnumWindow : OdinMenuEditorWindow

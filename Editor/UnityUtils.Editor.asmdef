@@ -1,6 +1,6 @@
 {
-    "name": "MHDante.UnityUtils.Editor",
-    "rootNamespace": "MHDante.UnityUtils.Editor",
+    "name": "UnityUtils.Editor",
+    "rootNamespace": "UnityUtils.Editor",
     "references": [
         "GUID:5b6b2ce991c96964ab56dff314ecb2e0"
     ],

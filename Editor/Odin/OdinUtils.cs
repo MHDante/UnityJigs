@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using Sirenix.OdinInspector.Editor;
 
-namespace MHDante.UnityUtils.Editor.Odin
+namespace UnityUtils.Editor.Odin
 {
     public static class OdinUtils
     {

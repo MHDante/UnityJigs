@@ -1,7 +1,7 @@
-using MHDante.UnityUtils.Editor.Settings;
 using UnityEditor;
+using UnityUtils.Editor.Settings;
 
-namespace MHDante.UnityUtils.Editor.AssemblyPeeker
+namespace UnityUtils.Editor.AssemblyPeeker
 {
     [FilePath("ProjectSettings/AssemblyPeeker.asset", FilePathAttribute.Location.ProjectFolder)]
     public class AssemblyPeekerSettings : SettingsSingleton<AssemblyPeekerSettings>

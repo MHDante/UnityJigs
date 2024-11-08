@@ -2,10 +2,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Attributes.Odin;
 using Sirenix.OdinInspector;
+using UnityUtils.Attributes.Odin;
 
-namespace MHDante.UnityUtils.ReadOnlyCollections
+namespace UnityUtils.ReadOnlyCollections
 {
     [SimpleContainer]
     public readonly struct ReadOnlyArray<T> //: IReadOnlyList<T>

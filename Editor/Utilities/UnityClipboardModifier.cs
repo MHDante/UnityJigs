@@ -4,7 +4,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
-namespace MHDante.UnityUtils.Editor.Utilities
+namespace UnityUtils.Editor.Utilities
 {
     public static class UnityClipboardModifier
     {

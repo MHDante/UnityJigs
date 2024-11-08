@@ -1,8 +1,8 @@
 using System;
-using MHDante.UnityUtils.Extensions;
 using UnityEngine;
+using UnityUtils.Extensions;
 
-namespace MHDante.UnityUtils.Types
+namespace UnityUtils.Types
 {
     [Serializable]
     public abstract class AnimatorParameter

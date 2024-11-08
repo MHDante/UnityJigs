@@ -1,16 +1,16 @@
 using System;
 using System.Linq;
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Attributes;
-using MHDante.UnityUtils.Types;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.OdinInspector.Editor.ValueResolvers;
 using Sirenix.Utilities.Editor;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
+using UnityUtils.Attributes;
+using UnityUtils.Types;
 
-namespace MHDante.UnityUtils.Editor.CustomDrawers
+namespace UnityUtils.Editor.CustomDrawers
 {
     [UsedImplicitly]
     public class AnimatorParameterPropertyDrawer : OdinValueDrawer<AnimatorParameter>

@@ -2,15 +2,15 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Attributes;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.OdinInspector.Editor.ValueResolvers;
 using Sirenix.Utilities.Editor;
 using UnityEditor;
 using UnityEngine;
+using UnityUtils.Attributes;
 using Object = UnityEngine.Object;
 
-namespace MHDante.UnityUtils.Editor.CustomDrawers
+namespace UnityUtils.Editor.CustomDrawers
 {
     [UsedImplicitly]
     public class AutoPopulateDrawer

@@ -1,6 +1,6 @@
 using System;
 
-namespace MHDante.UnityUtils.Attributes
+namespace UnityUtils.Attributes
 {
     public class AnimatorAttribute : Attribute
     {

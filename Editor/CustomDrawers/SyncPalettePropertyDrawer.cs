@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Attributes.Odin;
-using MHDante.UnityUtils.Extensions;
 using Sirenix.OdinInspector.Editor;
 using UnityEngine;
+using UnityUtils.Attributes.Odin;
+using UnityUtils.Extensions;
 
-namespace MHDante.UnityUtils.Editor.CustomDrawers
+namespace UnityUtils.Editor.CustomDrawers
 {
     [UsedImplicitly]
     public class SyncPalettePropertyDrawer : OdinAttributeDrawer<SyncPaletteAttribute, List<Color>>

@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Attributes;
 using Sirenix.OdinInspector;
 using Sirenix.Utilities;
 using UnityEditorInternal;
+using UnityUtils.Attributes;
 
-namespace MHDante.UnityUtils.Editor.EnumWindow
+namespace UnityUtils.Editor.EnumWindow
 {
     [Serializable, UsedImplicitly(ImplicitUseTargetFlags.Members)]
     internal class EnumType

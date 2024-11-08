@@ -1,11 +1,11 @@
 using System;
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Editor.Utilities;
 using Sirenix.OdinInspector.Editor;
 using UnityEditor;
 using UnityEngine;
+using UnityUtils.Editor.Utilities;
 
-namespace MHDante.UnityUtils.Editor.Odin
+namespace UnityUtils.Editor.Odin
 {
     [UsedImplicitly]
     public class CopyDrawer<T> : OdinValueDrawer<T>, IDefinesGenericMenuItems

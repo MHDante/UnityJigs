@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Sirenix.OdinInspector;
 
-namespace MHDante.UnityUtils.Attributes.Odin
+namespace UnityUtils.Attributes.Odin
 {
     [IncludeMyAttributes, ShowInInspector, ShowIf("@!ShowIfNotEmptyAttribute.IsEmpty($value)")]
     public class ShowIfNotEmptyAttribute : Attribute

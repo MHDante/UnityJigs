@@ -1,6 +1,6 @@
 using UnityEditor;
 
-namespace MHDante.UnityUtils.Editor.Utilities
+namespace UnityUtils.Editor.Utilities
 {
     public static class EditorUtils
     {

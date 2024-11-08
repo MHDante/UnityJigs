@@ -1,6 +1,6 @@
 {
-    "name": "MHDante.UnityUtils",
-    "rootNamespace": "MHDante.UnityUtils",
+    "name": "UnityUtils",
+    "rootNamespace": "UnityUtils",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace MHDante.UnityUtils.Editor.AssemblyPeeker
+namespace UnityUtils.Editor.AssemblyPeeker
 {
     public class AssemblyPeekerAsmdefProcessor : AssetPostprocessor
     {

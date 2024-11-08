@@ -1,9 +1,9 @@
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Attributes.Odin;
 using Sirenix.OdinInspector.Editor;
 using UnityEngine;
+using UnityUtils.Attributes.Odin;
 
-namespace MHDante.UnityUtils.Editor.Odin
+namespace UnityUtils.Editor.Odin
 {
     [UsedImplicitly]
     public class SimpleContainerPropertyDrawer : OdinAttributeDrawer<SimpleContainerAttribute>

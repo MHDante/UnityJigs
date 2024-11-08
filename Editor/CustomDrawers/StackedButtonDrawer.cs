@@ -1,10 +1,10 @@
 using JetBrains.Annotations;
-using MHDante.UnityUtils.Attributes.Odin;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.OdinInspector.Editor.ActionResolvers;
 using UnityEngine;
+using UnityUtils.Attributes.Odin;
 
-namespace MHDante.UnityUtils.Editor.CustomDrawers
+namespace UnityUtils.Editor.CustomDrawers
 {
     [UsedImplicitly, DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
     public class StackedButtonDrawer : OdinAttributeDrawer<StackedButtonAttribute>

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace MHDante.UnityUtils.Types
+namespace UnityUtils.Types
 {
     public class RuntimeScriptableSingleton<T> : ScriptableObject where T : RuntimeScriptableSingleton<T>
     {

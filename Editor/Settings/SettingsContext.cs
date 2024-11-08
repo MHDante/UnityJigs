@@ -1,4 +1,4 @@
-namespace MHDante.UnityUtils.Editor.Settings
+namespace UnityUtils.Editor.Settings
 {
     public class SettingsContext
     {
