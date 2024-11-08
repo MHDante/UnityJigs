@@ -10,7 +10,6 @@ namespace MHDante.UnityUtils.Editor
         protected abstract string Title { get; }
         protected abstract SettingsScope Scope { get; }
         protected virtual IEnumerable<string>? Keywords => null;
-        protected void Awake() => Save(true);
 
         public virtual SettingsProvider MakeProvider()
         {
