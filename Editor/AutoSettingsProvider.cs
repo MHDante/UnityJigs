@@ -11,6 +11,11 @@ namespace MHDante.UnityUtils.Editor
         protected abstract SettingsScope Scope { get; }
         protected virtual IEnumerable<string>? Keywords => null;
 
+        private void Awake()
+        {
+            if(this!= instance) DestroyImmediate(this);
+        }
+
         public virtual SettingsProvider MakeProvider()
         {
             SettingsContext context = new();
