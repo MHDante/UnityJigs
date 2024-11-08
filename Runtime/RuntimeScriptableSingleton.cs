@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace MHDante.UnityUtils
 {
-    public class SettingSingleton<T> : ScriptableObject where T : SettingSingleton<T>
+    public class RuntimeScriptableSingleton<T> : ScriptableObject where T : RuntimeScriptableSingleton<T>
     {
         public static T Instance => UnityUtils.GetPreloadedSingleton(ref _Instance);
         private static T _Instance = null!;
