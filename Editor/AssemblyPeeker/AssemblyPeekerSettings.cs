@@ -1,5 +1,4 @@
 using UnityEditor;
-using UnityEngine;
 
 namespace MHDante.UnityUtils.Editor.AssemblyPeeker
 {
@@ -10,7 +9,5 @@ namespace MHDante.UnityUtils.Editor.AssemblyPeeker
         protected override SettingsScope Scope => SettingsScope.Project;
         public PeekedAssembly[] PeekedAssemblies = { };
         private void OnValidate() => AssemblyPeekerAsmdefProcessor.UpdateAllAssemblies(this);
-
-
     }
 }
