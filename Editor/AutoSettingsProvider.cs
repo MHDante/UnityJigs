@@ -27,9 +27,9 @@ namespace MHDante.UnityUtils.Editor
         protected virtual void OnSettingsGUI(SettingsContext context)
         {
             UnityEditor.Editor.CreateCachedEditor(instance, null, ref context.CachedEditor);
-            EditorGUI.BeginChangeCheck();
             context.CachedEditor?.OnInspectorGUI();
-            if (EditorGUI.EndChangeCheck()) instance.Save(true);
+            if (EditorUtility.IsDirty(instance))
+                instance.Save(true);
         }
 
         protected class SettingsContext
