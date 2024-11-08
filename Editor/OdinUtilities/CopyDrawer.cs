@@ -4,7 +4,7 @@ using Sirenix.OdinInspector.Editor;
 using UnityEditor;
 using UnityEngine;
 
-namespace MHDante.UnityUtils.Editor
+namespace MHDante.UnityUtils.Editor.OdinUtilities
 {
     [UsedImplicitly]
     public class CopyDrawer<T> : OdinValueDrawer<T>, IDefinesGenericMenuItems

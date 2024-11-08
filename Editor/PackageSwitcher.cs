@@ -1,4 +1,5 @@
 using System.IO;
+using MHDante.UnityUtils.Editor.Settings;
 using Sirenix.OdinInspector;
 using UnityEditor;
 using FilePathAttribute = UnityEditor.FilePathAttribute;
@@ -24,6 +25,7 @@ namespace MHDante.UnityUtils.Editor
                 manifestText = manifestText.Replace(remote, local);
             }
             File.WriteAllText(ManifestPath, manifestText);
+            AssetDatabase.ImportAsset(ManifestPath);
         }
 
         [Button, HorizontalGroup, MenuItem("Utils/Package Switcher/Switch To Remote")]
@@ -35,6 +37,7 @@ namespace MHDante.UnityUtils.Editor
                 manifestText = manifestText.Replace(local, remote);
             }
             File.WriteAllText(ManifestPath, manifestText);
+            AssetDatabase.ImportAsset(ManifestPath);
         }
 
 

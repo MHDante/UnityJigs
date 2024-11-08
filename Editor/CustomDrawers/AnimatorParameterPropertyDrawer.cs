@@ -8,7 +8,7 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 
-namespace MHDante.UnityUtils.Editor
+namespace MHDante.UnityUtils.Editor.CustomDrawers
 {
     [UsedImplicitly]
     public class AnimatorParameterPropertyDrawer : OdinValueDrawer<AnimatorParameter>

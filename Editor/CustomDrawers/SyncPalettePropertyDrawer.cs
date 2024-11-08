@@ -5,7 +5,7 @@ using JetBrains.Annotations;
 using Sirenix.OdinInspector.Editor;
 using UnityEngine;
 
-namespace MHDante.UnityUtils.Editor
+namespace MHDante.UnityUtils.Editor.CustomDrawers
 {
     [UsedImplicitly]
     public class SyncPalettePropertyDrawer : OdinAttributeDrawer<SyncPaletteAttribute, List<Color>>

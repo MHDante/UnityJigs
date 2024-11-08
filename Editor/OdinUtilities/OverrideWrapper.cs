@@ -5,7 +5,7 @@ using Sirenix.Utilities.Editor;
 using UnityEditor;
 using UnityEngine;
 
-namespace MHDante.UnityUtils.Editor
+namespace MHDante.UnityUtils.Editor.OdinUtilities
 {
     public readonly struct OverrideWrapper : IDisposable
     {

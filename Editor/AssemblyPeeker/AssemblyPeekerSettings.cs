@@ -1,3 +1,4 @@
+using MHDante.UnityUtils.Editor.Settings;
 using UnityEditor;
 
 namespace MHDante.UnityUtils.Editor.AssemblyPeeker
