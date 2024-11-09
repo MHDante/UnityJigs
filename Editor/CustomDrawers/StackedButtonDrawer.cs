@@ -2,9 +2,9 @@ using JetBrains.Annotations;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.OdinInspector.Editor.ActionResolvers;
 using UnityEngine;
-using UnityUtils.Attributes.Odin;
+using UnityJigs.Attributes.Odin;
 
-namespace UnityUtils.Editor.CustomDrawers
+namespace UnityJigs.Editor.CustomDrawers
 {
     [UsedImplicitly, DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
     public class StackedButtonDrawer : OdinAttributeDrawer<StackedButtonAttribute>

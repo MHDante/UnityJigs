@@ -8,7 +8,7 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
-namespace UnityUtils.Extensions
+namespace UnityJigs.Extensions
 {
     public static class UnityUtils
     {

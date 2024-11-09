@@ -2,7 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 
-namespace UnityUtils.Attributes
+namespace UnityJigs.Attributes
 {
     [MeansImplicitUse(ImplicitUseTargetFlags.WithMembers)]
     public class DesignEnumAttribute : Attribute

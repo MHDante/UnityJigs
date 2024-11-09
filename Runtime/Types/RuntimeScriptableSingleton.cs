@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace UnityUtils.Types
+namespace UnityJigs.Types
 {
     public class RuntimeScriptableSingleton<T> : ScriptableObject where T : RuntimeScriptableSingleton<T>
     {

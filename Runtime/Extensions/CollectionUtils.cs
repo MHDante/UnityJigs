@@ -4,7 +4,7 @@ using UnityEngine.Pool;
 using Random = UnityEngine.Random;
 using Static = JetBrains.Annotations.RequireStaticDelegateAttribute;
 
-namespace UnityUtils.Extensions
+namespace UnityJigs.Extensions
 {
     public static class CollectionUtils
     {

@@ -1,7 +1,7 @@
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace UnityUtils.Components
+namespace UnityJigs.Components
 {
     [ExecuteAlways]
     public class CameraSync : MonoBehaviour

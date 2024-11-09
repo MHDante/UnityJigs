@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
-using UnityUtils.Attributes.Odin;
+using UnityJigs.Attributes.Odin;
 using Static = JetBrains.Annotations.RequireStaticDelegateAttribute;
 
-namespace UnityUtils.ReadOnlyCollections
+namespace UnityJigs.ReadOnlyCollections
 {
     [SimpleContainer]
     public readonly struct ReadOnlyList<T> //: IReadOnlyList<T>

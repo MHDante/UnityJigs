@@ -1,6 +1,6 @@
 using System;
 
-namespace UnityUtils.Attributes
+namespace UnityJigs.Attributes
 {
     public class AnimatorAttribute : Attribute
     {

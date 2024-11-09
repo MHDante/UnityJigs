@@ -3,9 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using JetBrains.Annotations;
 using Sirenix.OdinInspector;
-using UnityUtils.Attributes.Odin;
+using UnityJigs.Attributes.Odin;
 
-namespace UnityUtils.ReadOnlyCollections
+namespace UnityJigs.ReadOnlyCollections
 {
     [SimpleContainer]
     public readonly struct ReadOnlyArray<T> //: IReadOnlyList<T>

@@ -1,11 +1,11 @@
 using System.IO;
 using Sirenix.OdinInspector;
 using UnityEditor;
-using UnityUtils.Editor.Settings;
-using UnityUtils.Types;
+using UnityJigs.Editor.Settings;
+using UnityJigs.Types;
 using FilePathAttribute = UnityEditor.FilePathAttribute;
 
-namespace UnityUtils.Editor.Utilities
+namespace UnityJigs.Editor.Utilities
 {
     [FilePath("PackageSwitcher.asset", FilePathAttribute.Location.PreferencesFolder)]
     public class PackageSwitcherSettings : SettingsSingleton<PackageSwitcherSettings>

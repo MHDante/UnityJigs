@@ -3,9 +3,9 @@ using JetBrains.Annotations;
 using Sirenix.OdinInspector.Editor;
 using UnityEditor;
 using UnityEngine;
-using UnityUtils.Editor.Utilities;
+using UnityJigs.Editor.Utilities;
 
-namespace UnityUtils.Editor.Odin
+namespace UnityJigs.Editor.Odin
 {
     [UsedImplicitly]
     public class CopyDrawer<T> : OdinValueDrawer<T>, IDefinesGenericMenuItems

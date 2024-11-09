@@ -1,7 +1,7 @@
 using System;
 using JetBrains.Annotations;
 
-namespace UnityUtils.Editor.EnumWindow
+namespace UnityJigs.Editor.EnumWindow
 {
     [Serializable, UsedImplicitly(ImplicitUseTargetFlags.Members)]
     internal struct EnumValue

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace UnityUtils.Extensions
+namespace UnityJigs.Extensions
 {
     public static class EnumUtils<T> where T : unmanaged, Enum
     {

@@ -5,9 +5,9 @@ using JetBrains.Annotations;
 using Sirenix.OdinInspector;
 using Sirenix.Utilities;
 using UnityEditorInternal;
-using UnityUtils.Attributes;
+using UnityJigs.Attributes;
 
-namespace UnityUtils.Editor.EnumWindow
+namespace UnityJigs.Editor.EnumWindow
 {
     [Serializable, UsedImplicitly(ImplicitUseTargetFlags.Members)]
     internal class EnumType

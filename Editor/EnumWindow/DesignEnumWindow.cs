@@ -3,9 +3,9 @@ using System.Linq;
 using JetBrains.Annotations;
 using Sirenix.OdinInspector.Editor;
 using UnityEditor;
-using UnityUtils.Attributes;
+using UnityJigs.Attributes;
 
-namespace UnityUtils.Editor.EnumWindow
+namespace UnityJigs.Editor.EnumWindow
 {
     [UsedImplicitly(ImplicitUseTargetFlags.Members)]
     public class DesignEnumWindow : OdinMenuEditorWindow

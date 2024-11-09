@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using JetBrains.Annotations;
 using UnityEngine;
 
-namespace UnityUtils.Types
+namespace UnityJigs.Types
 {
     [Serializable]
     public class SerializedDict<TKey, TValue> : IDictionary<TKey, TValue>, ISerializationCallbackReceiver

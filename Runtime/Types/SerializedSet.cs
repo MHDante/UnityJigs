@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using Sirenix.Utilities;
 using UnityEngine;
 
-namespace UnityUtils.Types
+namespace UnityJigs.Types
 {
     [Serializable]
     public class SerializedSet<T> : ISet<T>,IReadOnlyCollection<T>, ISerializationCallbackReceiver

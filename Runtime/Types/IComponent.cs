@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace UnityUtils.Types
+namespace UnityJigs.Types
 {
     // ReSharper disable InconsistentNaming - Unity Naming
     // Used for interfaces that are implemented in Unity

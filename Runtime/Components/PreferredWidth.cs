@@ -1,9 +1,9 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using UnityUtils.Extensions;
+using UnityJigs.Extensions;
 
-namespace UnityUtils.Components
+namespace UnityJigs.Components
 {
     public class PreferredWidth : UIBehaviour, ILayoutSelfController
     {

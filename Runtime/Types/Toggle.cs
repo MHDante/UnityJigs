@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using Sirenix.OdinInspector;
 
-namespace UnityUtils.Types
+namespace UnityJigs.Types
 {
     [Serializable, InlineProperty]
     public struct Toggle<T>

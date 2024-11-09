@@ -1,4 +1,4 @@
-namespace UnityUtils.Editor.Settings
+namespace UnityJigs.Editor.Settings
 {
     public class SettingsContext
     {

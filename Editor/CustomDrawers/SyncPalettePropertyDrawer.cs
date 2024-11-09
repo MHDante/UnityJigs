@@ -4,10 +4,10 @@ using System.Linq;
 using JetBrains.Annotations;
 using Sirenix.OdinInspector.Editor;
 using UnityEngine;
-using UnityUtils.Attributes.Odin;
-using UnityUtils.Extensions;
+using UnityJigs.Attributes.Odin;
+using UnityJigs.Extensions;
 
-namespace UnityUtils.Editor.CustomDrawers
+namespace UnityJigs.Editor.CustomDrawers
 {
     [UsedImplicitly]
     public class SyncPalettePropertyDrawer : OdinAttributeDrawer<SyncPaletteAttribute, List<Color>>

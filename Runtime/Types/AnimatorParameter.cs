@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using UnityUtils.Extensions;
+using UnityJigs.Extensions;
 
-namespace UnityUtils.Types
+namespace UnityJigs.Types
 {
     [Serializable]
     public abstract class AnimatorParameter

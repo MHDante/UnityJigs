@@ -2,7 +2,7 @@ using System;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace UnityUtils.Editor.AssemblyPeeker
+namespace UnityJigs.Editor.AssemblyPeeker
 {
     [Serializable]
     public class PeekedAssembly

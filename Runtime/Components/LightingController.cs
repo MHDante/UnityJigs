@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Serialization;
 
-namespace UnityUtils.Components
+namespace UnityJigs.Components
 {
     [ExecuteInEditMode]
     public class LightingController : MonoBehaviour

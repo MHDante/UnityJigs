@@ -7,10 +7,10 @@ using Sirenix.Utilities.Editor;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
-using UnityUtils.Attributes;
-using UnityUtils.Types;
+using UnityJigs.Attributes;
+using UnityJigs.Types;
 
-namespace UnityUtils.Editor.CustomDrawers
+namespace UnityJigs.Editor.CustomDrawers
 {
     [UsedImplicitly]
     public class AnimatorParameterPropertyDrawer : OdinValueDrawer<AnimatorParameter>

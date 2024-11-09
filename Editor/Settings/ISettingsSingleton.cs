@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace UnityUtils.Editor.Settings
+namespace UnityJigs.Editor.Settings
 {
     internal interface ISettingsSingleton
     {

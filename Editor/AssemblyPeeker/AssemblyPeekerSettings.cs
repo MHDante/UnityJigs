@@ -1,7 +1,7 @@
 using UnityEditor;
-using UnityUtils.Editor.Settings;
+using UnityJigs.Editor.Settings;
 
-namespace UnityUtils.Editor.AssemblyPeeker
+namespace UnityJigs.Editor.AssemblyPeeker
 {
     [FilePath("ProjectSettings/AssemblyPeeker.asset", FilePathAttribute.Location.ProjectFolder)]
     public class AssemblyPeekerSettings : SettingsSingleton<AssemblyPeekerSettings>

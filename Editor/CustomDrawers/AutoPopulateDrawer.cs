@@ -7,10 +7,10 @@ using Sirenix.OdinInspector.Editor.ValueResolvers;
 using Sirenix.Utilities.Editor;
 using UnityEditor;
 using UnityEngine;
-using UnityUtils.Attributes;
+using UnityJigs.Attributes;
 using Object = UnityEngine.Object;
 
-namespace UnityUtils.Editor.CustomDrawers
+namespace UnityJigs.Editor.CustomDrawers
 {
     [UsedImplicitly]
     public class AutoPopulateDrawer

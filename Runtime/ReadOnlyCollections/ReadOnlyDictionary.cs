@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
-using UnityUtils.Attributes.Odin;
+using UnityJigs.Attributes.Odin;
 
-namespace UnityUtils.ReadOnlyCollections
+namespace UnityJigs.ReadOnlyCollections
 {
     [SimpleContainer]
     public readonly struct ReadOnlyDictionary<TKey, TValue>

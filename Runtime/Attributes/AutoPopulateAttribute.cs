@@ -1,7 +1,7 @@
 using System;
 using Sirenix.OdinInspector;
 
-namespace UnityUtils.Attributes
+namespace UnityJigs.Attributes
 {
     [IncludeMyAttributes]
     [ListDrawerSettings(OnTitleBarGUI = "@AutoPopulateDrawer.DrawButton($property)")]
