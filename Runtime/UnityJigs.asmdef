@@ -1,6 +1,6 @@
 {
-    "name": "UnityUtils",
-    "rootNamespace": "UnityUtils",
+    "name": "UnityJigs",
+    "rootNamespace": "UnityJigs",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
