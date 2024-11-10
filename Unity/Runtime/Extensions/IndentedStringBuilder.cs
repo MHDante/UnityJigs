@@ -44,21 +44,21 @@ namespace UnityJigs.Extensions
 
     public readonly struct IndentScope : IDisposable
     {
-        private readonly IndentedStringBuilder Builder;
-        private readonly int Delta;
-        private readonly string? ExitString;
+        private readonly IndentedStringBuilder _builder;
+        private readonly int _delta;
+        private readonly string? _exitString;
 
         internal IndentScope(IndentedStringBuilder builder, int delta, string? exitString)
         {
-            Builder = builder;
-            Delta = delta;
-            ExitString = exitString;
+            _builder = builder;
+            _delta = delta;
+            _exitString = exitString;
         }
 
         public void Dispose()
         {
-            Builder.IndentLevel -= Delta;
-            if (ExitString != null) Builder.StartLine.AppendLine(ExitString);
+            _builder.IndentLevel -= _delta;
+            if (_exitString != null) _builder.StartLine.AppendLine(_exitString);
         }
     }
 }

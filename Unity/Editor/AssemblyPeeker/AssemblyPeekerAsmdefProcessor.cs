@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
-using UnityJigs.Attributes;
+using UnityJigs.Editor.Utilities;
 
 namespace UnityJigs.Editor.AssemblyPeeker
 {
@@ -13,85 +12,43 @@ namespace UnityJigs.Editor.AssemblyPeeker
     {
         private void OnPreprocessAsset()
         {
-            var settings = AssemblyPeekerSettings.instance;
-
-            var settingsPath = AssetDatabase.GetAssetPath(settings);
-
-            if (assetPath == settingsPath)
+            if (!assetPath.EndsWith("asmdef"))
             {
-                UpdateAllAssemblies(settings);
+                if (context.mainObject is AssemblyPeeker assPeeker) Apply(assPeeker);
                 return;
             }
 
-            if (!assetPath.EndsWith("asmdef")) return;
-
-            foreach (var peekedAssembly in settings.PeekedAssemblies)
+            var assemblyPeekers = EditorUtils.FindAllAssetsOfType<AssemblyPeeker>();
+            foreach (var assPeeker in assemblyPeekers)
             {
-                if (peekedAssembly.Asmdef == null) continue;
-                var peekedPath = AssetDatabase.GetAssetPath(peekedAssembly.Asmdef);
-                if (peekedPath != assetPath) continue;
-                UpdateAssembly(peekedPath, peekedAssembly);
-                break;
-            }
+                foreach (var peekedAssembly in assPeeker.PeekedAssemblies)
+                {
+                    if (peekedAssembly == null) continue;
+                    if (assPeeker.Peeker == null) continue;
+                    var peekedPath = AssetDatabase.GetAssetPath(peekedAssembly);
+                    if (peekedPath != assetPath) continue;
+                    UpdateAssembly(peekedPath, assPeeker.Peeker);
+                    break;
+                }
 
-            var text = File.ReadAllText(assetPath);
-            var name = AsmdefDeserializer.GetName(text);
-            var peekedDict = GetAttributeAssemblies();
-            if(peekedDict.TryGetValue(name, out var peekers))
-            {
-                foreach (var peeker in peekers)
-                    AddIvtAttribute(GetInfoPath(assetPath), peeker);
             }
         }
 
-        public static Dictionary<string, List<string>> GetAttributeAssemblies()
+        public static void Apply(AssemblyPeeker settings)
         {
-            var result = new Dictionary<string, List<string>>();
-
-            foreach (var ass in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var attr = ass.GetCustomAttribute<PeekAssemblyAttribute>();
-                if (attr == null) continue;
-                var list = result.TryGetValue(attr.AssemblyName, out var v) ? v :
-                    result[attr.AssemblyName] = new List<string>();
-
-                list.Add(ass.GetName().Name);
-            }
-
-            return result;
-        }
-
-        public static void UpdateAllAssemblies(AssemblyPeekerSettings settings)
-        {
-            var peekedDict = GetAttributeAssemblies();
             foreach (var peekedAssembly in settings.PeekedAssemblies)
             {
-                if (peekedAssembly.Asmdef == null) continue;
-                var asmdefPath = AssetDatabase.GetAssetPath(peekedAssembly.Asmdef);
+                if (peekedAssembly == null) continue;
+                var asmdefPath = AssetDatabase.GetAssetPath(peekedAssembly);
                 UpdateAssembly(asmdefPath, peekedAssembly);
-
-                var name = AsmdefDeserializer.GetName(peekedAssembly.Asmdef.text);
-                if (!peekedDict.TryGetValue(name, out var peekers)) continue;
-                foreach (var peeker in peekers)
-                    AddIvtAttribute(GetInfoPath(asmdefPath), peeker);
             }
         }
 
-        private static void UpdateAssembly(string asmdefPath, PeekedAssembly peekedAssembly)
+        private static void UpdateAssembly(string peekedPath, AssemblyDefinitionAsset peekerAsmdef)
         {
-            var targetPath = GetInfoPath(asmdefPath);
-            foreach (var peekerAsmdef in peekedAssembly.PeekerAsmdefs)
-            {
-                if (peekerAsmdef == null) continue;
-                var peekerName = AsmdefDeserializer.GetName(peekerAsmdef.text);
-                AddIvtAttribute(targetPath, peekerName);
-
-            }
-
-            foreach (var peekerName in peekedAssembly.PeekerAssemblyNames)
-            {
-                AddIvtAttribute(targetPath, peekerName);
-            }
+            var targetPath = GetInfoPath(peekedPath);
+            var peekerName = AsmdefDeserializer.GetName(peekerAsmdef.text);
+            AddIvtAttribute(targetPath, peekerName);
         }
 
         private static string GetInfoPath(string asmdefPath)
