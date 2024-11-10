@@ -4,10 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
-using UnityEditorInternal;
 using UnityEngine;
 using UnityJigs.Attributes;
-using UnityJigs.Extensions;
 
 namespace UnityJigs.Editor.AssemblyPeeker
 {

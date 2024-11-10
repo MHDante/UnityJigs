@@ -1,8 +1,6 @@
 using Sirenix.OdinInspector;
 using Unity.Behavior;
 using UnityEngine;
-using UnityJigs.Attributes;
-
 
 namespace UnityJigs.Behaviour
 {
@@ -19,7 +17,7 @@ namespace UnityJigs.Behaviour
         public Blackboard? Blackboard => BlackboardSource switch
         {
             BlackboardTypes.Agent when Application.isPlaying => SourceAgent?.BlackboardReference.Blackboard,
-            BlackboardTypes.Agent => null,//SourceAgent?.BlackboardReference.SourceBlackboardAsset.Blackboard,
+            BlackboardTypes.Agent => SourceAgent?.BlackboardReference.SourceBlackboardAsset.Blackboard,
             BlackboardTypes.Asset => SourceAsset?.Blackboard,
             _ => null,
         };

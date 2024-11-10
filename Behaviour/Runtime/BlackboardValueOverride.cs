@@ -1,8 +1,4 @@
-using UnityJigs.Attributes;
 using UnityJigs.Extensions;
-
-
-
 using System;
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
@@ -21,7 +17,7 @@ namespace UnityJigs.Behaviour
         public Blackboard? Blackboard => BlackboardUpdater.Blackboard;
 
         public BlackboardVariable<T>? Variable =>
-            null;//Blackboard?.GetVariable(Guid, out var v) == true ? v as BlackboardVariable<T> : null;
+            Blackboard?.GetVariable(Guid, out var v) == true ? v as BlackboardVariable<T> : null;
 
         public string Name => Variable?.Name.NullIfWhitespace() ?? "MISSING";
         private string Label => IsOverriden ? Name + " (Overriden)" : Name;
@@ -34,7 +30,8 @@ namespace UnityJigs.Behaviour
         [SerializeField, HorizontalGroup, ShowIf(nameof(IsOverriden)), LabelText("@" + nameof(Label))]
         private T? OverrideValue;
 
-        [ShowInInspector, AssetsOnly, HorizontalGroup, ShowIf("@!"+nameof(IsOverriden)), LabelText("@" + nameof(Label))]
+        [ShowInInspector, AssetsOnly, HorizontalGroup, ShowIf("@!" + nameof(IsOverriden)),
+         LabelText("@" + nameof(Label))]
         public T? Value
         {
             get => IsOverriden ? OverrideValue : Variable == null ? default : Variable.Value;
@@ -64,7 +61,6 @@ namespace UnityJigs.Behaviour
 
         public BlackboardValueOverride(BlackboardUpdater updater, string guid)
         {
-
             Guid = new SerializableGUID(guid);
             BlackboardUpdater = updater;
             OverrideValue = default;
