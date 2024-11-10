@@ -1,7 +1,11 @@
 {
-    "name": "UnityJigs",
-    "rootNamespace": "UnityJigs",
-    "references": [],
+    "name": "UnityJigs.Behaviour",
+    "rootNamespace": "UnityJigs.Behaviour",
+    "references": [
+        "GUID:73907d139b13f8a43b7e3e95c329d30a",
+        "GUID:5b6b2ce991c96964ab56dff314ecb2e0",
+        "GUID:20ee76f6d94ae4b0595f3ceb1c5359a7"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": true,
