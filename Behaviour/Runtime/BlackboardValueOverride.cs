@@ -16,8 +16,17 @@ namespace UnityJigs.Behaviour
         [HideInInspector] public BlackboardUpdater BlackboardUpdater;
         public Blackboard? Blackboard => BlackboardUpdater.Blackboard;
 
-        public BlackboardVariable<T>? Variable =>
-            Blackboard?.GetVariable(Guid, out var v) == true ? v as BlackboardVariable<T> : null;
+        public BlackboardVariable<T>? Variable
+        {
+            get
+            {
+                if (Blackboard == null) return null;
+                foreach (var variable in Blackboard.Variables)
+                    if (variable is BlackboardVariable<T> tVar && tVar.GUID == Guid) return tVar;
+                return null;
+            }
+        }
+
 
         public string Name => Variable?.Name.NullIfWhitespace() ?? "MISSING";
         private string Label => IsOverriden ? Name + " (Overriden)" : Name;

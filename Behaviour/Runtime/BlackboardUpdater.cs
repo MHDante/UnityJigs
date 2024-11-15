@@ -14,10 +14,12 @@ namespace UnityJigs.Behaviour
         [ShowIf(nameof(BlackboardSource), BlackboardTypes.Agent)]
         public BehaviorGraphAgent? SourceAgent = null!;
 
+
+
         public Blackboard? Blackboard => BlackboardSource switch
         {
             BlackboardTypes.Agent when Application.isPlaying => SourceAgent?.BlackboardReference.Blackboard,
-            BlackboardTypes.Agent => SourceAgent?.BlackboardReference.SourceBlackboardAsset.Blackboard,
+            BlackboardTypes.Agent => SourceAgent?.Graph.BlackboardReference.Blackboard,
             BlackboardTypes.Asset => SourceAsset?.Blackboard,
             _ => null,
         };
