@@ -26,7 +26,7 @@ namespace UnityJigs.Editor.EnumWindow
             return tree;
         }
 
-        [MenuItem("Pleasure Circuit/Enums")]
+        [MenuItem("Utils/Enums")]
         private static void OpenWindow() => GetWindow<DesignEnumWindow>();
     }
 }
