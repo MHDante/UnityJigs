@@ -169,5 +169,21 @@ namespace UnityJigs.Extensions
         public static T? SafeNull<T>(this T? source) where T : Object =>
             // ReSharper disable once MergeConditionalExpression
             ReferenceEquals(source, null) ? null : source;
+
+
+        public static void ClampMin(this ref float source, float min)
+        {
+            if (source < min) source = min;
+        }
+
+        public static void ClampMax(this ref float source, float max)
+        {
+            if (source > max) source = max;
+        }
+
+        public static void Clamp(this ref float source, float min, float max)
+        {
+            source = Mathf.Clamp(source, min, max);
+        }
     }
 }
