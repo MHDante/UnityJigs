@@ -185,5 +185,7 @@ namespace UnityJigs.Extensions
         {
             source = Mathf.Clamp(source, min, max);
         }
+
+        public static float Sqr(this float f) => f * f;
     }
 }
