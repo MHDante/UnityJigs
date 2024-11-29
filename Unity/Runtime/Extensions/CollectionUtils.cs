@@ -155,5 +155,8 @@ namespace UnityJigs.Extensions
                 yield return item;
             }
         }
+
+        public static T? GetSafe<T>(this IReadOnlyList<T>? list, int index) =>
+            list == null || list.Count <= index ? default : list[index];
     }
 }
