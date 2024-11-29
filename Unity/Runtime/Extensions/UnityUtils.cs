@@ -40,7 +40,8 @@ namespace UnityJigs.Extensions
         public static Vector2 XY(this Vector3 v) => v;
         public static Vector2 YX(this Vector2 v) => new(v.y, v.x);
         public static Vector2 XZ(this Vector3 v) => new(v.x, v.z);
-        public static Vector3 X_Z(this Vector2 v, float y = 0) => new(v.x, y, v.y);
+        public static Vector3 X_Z(this Vector2 v, float y) => new(v.x, y, v.y);
+        public static Vector3 X0Z(this Vector2 v) => new(v.x, 0, v.y);
 
         public static Vector3 Divide(this Vector3 a, Vector3 b) => new(a.x / b.x, a.y / b.y, a.z / b.z);
         public static Vector3 Multiply(this Vector3 a, Vector3 b) => new(a.x * b.x, a.y * b.y, a.z * b.z);
@@ -57,6 +58,7 @@ namespace UnityJigs.Extensions
             return singletonField = JsonUtility.FromJson<T>(json);
         }
 
+
         public static void SaveData<T>(T data, string fileName)
         {
             var path = Path.Combine(Application.persistentDataPath, fileName + ".json");
@@ -69,7 +71,7 @@ namespace UnityJigs.Extensions
 #if UNITY_EDITOR
             if (singletonField) return singletonField;
             var candidate = PlayerSettings.GetPreloadedAssets().OfType<T>().First();
-            if (!candidate) throw new FileNotFoundException($"Could Not Find object of type T in Preloaded Assets");
+            if (!candidate) throw new FileNotFoundException("Could Not Find object of type T in Preloaded Assets");
             singletonField = candidate;
 #endif
             return singletonField;

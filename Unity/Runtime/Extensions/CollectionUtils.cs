@@ -60,26 +60,28 @@ namespace UnityJigs.Extensions
         public static bool ContainsBy<T, TKey>(this IReadOnlyList<T> list, TKey key, [Static] Func<T, TKey> selector) =>
             IndexOfBy(list, key, selector) >= 0;
 
-        public static int IndexOfBy<T, TKey>(this IReadOnlyList<T> list, TKey key, [Static] Func<T, TKey> selector)
+        public static int IndexOfBy<T, TKey>(this IReadOnlyList<T> list, TKey key, [Static] Func<T, TKey> selector,
+            IEqualityComparer<TKey>? comparer = default)
         {
+            comparer ??= EqualityComparer<TKey>.Default;
             for (var i = 0; i < list.Count; i++)
             {
                 var item = list[i];
-                var isEqual = EqualityComparer<TKey>.Default.Equals(key, selector(item));
+                var isEqual = comparer.Equals(key, selector(item));
                 if (isEqual) return i;
             }
 
             return -1;
         }
 
-        public static T? FindByOrDefault<T, TKey>(this IReadOnlyList<T> list, [Static] Func<T, TKey> selector,
-            TKey value)
-            where TKey : IEquatable<TKey>
+        public static T? FindByOrDefault<T, TKey>(this IReadOnlyList<T> list, TKey value,
+            [Static] Func<T, TKey> selector, IEqualityComparer<TKey>? comparer = default)
         {
+            comparer ??= EqualityComparer<TKey>.Default;
             for (var i = 0; i < list.Count; i++)
             {
                 var item = list[i];
-                if (selector(item).Equals(value))
+                if (comparer.Equals(selector(item), value))
                     return item;
             }
 
@@ -108,7 +110,8 @@ namespace UnityJigs.Extensions
         public static void Shuffle<T>(this IList<T> list)
         {
             var n = list.Count;
-            while (n > 1) {
+            while (n > 1)
+            {
                 n--;
                 var k = Random.Range(0, n);
                 (list[k], list[n]) = (list[n], list[k]);
@@ -122,8 +125,35 @@ namespace UnityJigs.Extensions
         public static string Join(this string[] list, char separator) => string.Join(separator, list);
         public static string Join(this string[] list, string separator) => string.Join(separator, list);
 
-        public static TValue? GetValueOrDefault<TKey, TValue>(this IDictionary<TKey, TValue> dict,TKey key, TValue? defVal = default) =>
+        public static TValue? GetOrDefault<TKey, TValue>(this IDictionary<TKey, TValue> dict, TKey key,
+            TValue? defVal = default) =>
             dict.TryGetValue(key, out var v) ? v : defVal;
 
+
+        public static void ForceKeys<K, V>(this IDictionary<K, V> dict, IEnumerable<K> keys,
+            Func<K, V>? defaultFactory = null)
+        {
+            using var set = HashSetPool<K>.Get(out var toRemove);
+            foreach (var key in dict.Keys) toRemove.Add(key);
+            foreach (var key in keys)
+            {
+                toRemove.Remove(key);
+                if (dict.TryGetValue(key, out _)) continue;
+                dict[key] = defaultFactory == null ? default! : defaultFactory(key);
+            }
+
+            foreach (var key in toRemove) dict.Remove(key);
+        }
+
+        public static IEnumerable<T> Except<T>(this IEnumerable<T> source, T exception,
+            IEqualityComparer<T>? comparer = null)
+        {
+            comparer ??= EqualityComparer<T>.Default;
+            foreach (var item in source)
+            {
+                if (comparer.Equals(item, exception)) continue;
+                yield return item;
+            }
+        }
     }
 }
