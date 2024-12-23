@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -18,9 +19,19 @@ namespace UnityJigs.Settings
             Right,
         }
 
-        public bool Negate = false;
-        [InlineEditor(Expanded = true)]
-        public FloatReference? Source = null;
+        [Serializable]
+        public struct Entry
+        {
+            [TableColumnWidth(5)] public bool Negate;
+            [Required, InlineEditor(Expanded = true)] public FloatReference Source;
+        }
+
+        [HideInInspector] public bool Negate = false;
+        [HideInInspector] public FloatReference? Source = null;
+
+        [TableList]
+        public List<Entry> Entries = new();
+
         public SyncTargets TargetDimension;
 
         private RectTransform? _rt;
@@ -29,8 +40,20 @@ namespace UnityJigs.Settings
         private void Update()
         {
             if (Source == null) return;
-            var value = Source.Value;
-            SetTargetValue(Negate ? -value : value);
+            var value = 0f;
+
+            foreach (var entry in Entries)
+            {
+                var source = entry.Source;
+                if(!source) continue;
+                value += entry.Negate ? -source.Value : source.Value;
+            }
+            SetTargetValue(value);
+        }
+
+        private void OnValidate()
+        {
+            if (Entries.Count < 1) Entries.Add(new() { Negate = Negate, Source = Source! });
         }
 
         private void SetTargetValue(float value)
