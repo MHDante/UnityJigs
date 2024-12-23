@@ -6,18 +6,12 @@ namespace UnityJigs.Behaviour
 {
     public class FixedBehaviourGraphAgent : BehaviorGraphAgent
     {
-        private static readonly Action<BehaviorGraphAgent>? BaseUpdate = typeof(BehaviorGraphAgent)
-            .GetMethod(nameof(Update), BindingFlags.Instance | BindingFlags.NonPublic)
-            ?.CreateDelegate(typeof(Action<BehaviorGraphAgent>)) as Action<BehaviorGraphAgent>;
-
-
         private void FixedUpdate()
         {
-            if (BaseUpdate == null) throw new Exception("Cannot find base Update method");
-            BaseUpdate(this);
+            base.Update();
         }
 
-        public void Update()
+        public new void Update()
         {
             // No-Op
         }
