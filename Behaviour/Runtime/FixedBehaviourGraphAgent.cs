@@ -1,5 +1,3 @@
-using System;
-using System.Reflection;
 using Unity.Behavior;
 
 namespace UnityJigs.Behaviour

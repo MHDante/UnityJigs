@@ -3,7 +3,6 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
@@ -70,7 +69,7 @@ namespace UnityJigs.Extensions
         {
 #if UNITY_EDITOR
             if (singletonField) return singletonField;
-            var candidate = PlayerSettings.GetPreloadedAssets().OfType<T>().First();
+            var candidate = UnityEditor.PlayerSettings.GetPreloadedAssets().OfType<T>().First();
             if (!candidate) throw new FileNotFoundException("Could Not Find object of type T in Preloaded Assets");
             singletonField = candidate;
 #endif
@@ -189,5 +188,15 @@ namespace UnityJigs.Extensions
         }
 
         public static float Sqr(this float f) => f * f;
+
+
+        public static void ExitGameOrPlaymode()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.ExitPlaymode();
+#else
+            Application.Quit();
+#endif
+        }
     }
 }
