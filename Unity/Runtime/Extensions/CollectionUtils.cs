@@ -158,5 +158,13 @@ namespace UnityJigs.Extensions
 
         public static T? GetSafe<T>(this IReadOnlyList<T>? list, int index) =>
             list == null || list.Count <= index ? default : list[index];
+
+
+        public static void AddRange<T>(this HashSet<T> hashSet, IEnumerable<T> range)
+        {
+            foreach (T obj in range)
+                hashSet.Add(obj);
+        }
+
     }
 }

@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Sirenix.OdinInspector;
-using Sirenix.Utilities;
-using Sirenix.Utilities.Editor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 #if UNITY_EDITOR
+using Sirenix.Utilities;
+using Sirenix.Utilities.Editor;
 using UnityEditor;
 #endif
 
@@ -27,6 +27,7 @@ namespace UnityJigs.Types
 
 #if !UNITY_EDITOR
         private void UpdatePath() { }
+        private void DeferredUpdatePath() { }
     }
 }
 #else

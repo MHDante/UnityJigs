@@ -1,11 +1,44 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
-using Sirenix.Utilities;
 
 namespace UnityJigs.Extensions
 {
     public static class TypeUtils
     {
+        /// <summary>Type name alias lookup.</summary>
+        public static readonly Dictionary<Type, string> TypeNameAlternatives = new()
+        {
+            { typeof(float), "float" },
+            { typeof(double), "double" },
+            { typeof(sbyte), "sbyte" },
+            { typeof(short), "short" },
+            { typeof(int), "int" },
+            { typeof(long), "long" },
+            { typeof(byte), "byte" },
+            { typeof(ushort), "ushort" },
+            { typeof(uint), "uint" },
+            { typeof(ulong), "ulong" },
+            { typeof(decimal), "decimal" },
+            { typeof(string), "string" },
+            { typeof(char), "char" },
+            { typeof(bool), "bool" },
+            { typeof(float[]), "float[]" },
+            { typeof(double[]), "double[]" },
+            { typeof(sbyte[]), "sbyte[]" },
+            { typeof(short[]), "short[]" },
+            { typeof(int[]), "int[]" },
+            { typeof(long[]), "long[]" },
+            { typeof(byte[]), "byte[]" },
+            { typeof(ushort[]), "ushort[]" },
+            { typeof(uint[]), "uint[]" },
+            { typeof(ulong[]), "ulong[]" },
+            { typeof(decimal[]), "decimal[]" },
+            { typeof(string[]), "string[]" },
+            { typeof(char[]), "char[]" },
+            { typeof(bool[]), "bool[]" }
+        };
+
         public static string GetFullCompilerSafeTypeName(this Type type)
         {
             var sb = new StringBuilder();
@@ -20,7 +53,7 @@ namespace UnityJigs.Extensions
 
             if (!type.IsGenericType)
             {
-                if (TypeExtensions.TypeNameAlternatives.TryGetValue(type, out var s)) return sb.Append(s);
+                if (TypeNameAlternatives.TryGetValue(type, out var s)) return sb.Append(s);
                 return sb.Append(type.FullName);
             }
 
@@ -39,8 +72,8 @@ namespace UnityJigs.Extensions
                     sb.Append(", ");
                 sb.AppendFullTypeName(genericArguments[i]);
             }
-            return sb.Append(">");
 
+            return sb.Append(">");
         }
     }
 }
