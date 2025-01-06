@@ -4,13 +4,13 @@ namespace UnityJigs.Types
 {
     public class Preference
     {
-        private readonly string Key;
-        private readonly bool IsEditor;
+        private readonly string _key;
+        private readonly bool _isEditor;
 
         public Preference(string key, bool isEditor)
         {
-            IsEditor = isEditor;
-            Key = key;
+            _isEditor = isEditor;
+            _key = key;
         }
 
         public abstract class Pref<T> : Preference
@@ -22,10 +22,10 @@ namespace UnityJigs.Types
 
             public T Value
             {
-                get => IsEditor ? EditorValue : RuntimeValue;
+                get => _isEditor ? EditorValue : RuntimeValue;
                 set
                 {
-                    if (IsEditor) EditorValue = value;
+                    if (_isEditor) EditorValue = value;
                     else RuntimeValue = value;
                 }
             }
@@ -47,15 +47,15 @@ namespace UnityJigs.Types
 #if UNITY_EDITOR
             protected override string EditorValue
             {
-                get => UnityEditor.EditorPrefs.GetString(Key, DefaultValue);
-                set => UnityEditor.EditorPrefs.SetString(Key, value);
+                get => UnityEditor.EditorPrefs.GetString(_key, DefaultValue);
+                set => UnityEditor.EditorPrefs.SetString(_key, value);
             }
 #endif
 
             protected override string RuntimeValue
             {
-                get => PlayerPrefs.GetString(Key, DefaultValue);
-                set => PlayerPrefs.SetString(Key, value);
+                get => PlayerPrefs.GetString(_key, DefaultValue);
+                set => PlayerPrefs.SetString(_key, value);
             }
         }
 
@@ -66,14 +66,14 @@ namespace UnityJigs.Types
 #if UNITY_EDITOR
             protected override int EditorValue
             {
-                get => UnityEditor.EditorPrefs.GetInt(Key, DefaultValue);
-                set => UnityEditor.EditorPrefs.SetInt(Key, value);
+                get => UnityEditor.EditorPrefs.GetInt(_key, DefaultValue);
+                set => UnityEditor.EditorPrefs.SetInt(_key, value);
             }
 #endif
             protected override int RuntimeValue
             {
-                get => PlayerPrefs.GetInt(Key, DefaultValue);
-                set => PlayerPrefs.SetInt(Key, value);
+                get => PlayerPrefs.GetInt(_key, DefaultValue);
+                set => PlayerPrefs.SetInt(_key, value);
             }
         }
 
@@ -84,15 +84,15 @@ namespace UnityJigs.Types
 #if UNITY_EDITOR
             protected override bool EditorValue
             {
-                get => UnityEditor.EditorPrefs.GetBool(Key, DefaultValue);
-                set => UnityEditor.EditorPrefs.SetBool(Key, value);
+                get => UnityEditor.EditorPrefs.GetBool(_key, DefaultValue);
+                set => UnityEditor.EditorPrefs.SetBool(_key, value);
             }
 #endif
 
             protected override bool RuntimeValue
             {
-                get => PlayerPrefs.GetInt(Key, DefaultValue ? 1 : 0) != 0;
-                set => PlayerPrefs.SetInt(Key, value ? 1 : 0);
+                get => PlayerPrefs.GetInt(_key, DefaultValue ? 1 : 0) != 0;
+                set => PlayerPrefs.SetInt(_key, value ? 1 : 0);
             }
         }
 
@@ -103,15 +103,15 @@ namespace UnityJigs.Types
 #if UNITY_EDITOR
             protected override float EditorValue
             {
-                get => UnityEditor.EditorPrefs.GetFloat(Key, DefaultValue);
-                set => UnityEditor.EditorPrefs.SetFloat(Key, value);
+                get => UnityEditor.EditorPrefs.GetFloat(_key, DefaultValue);
+                set => UnityEditor.EditorPrefs.SetFloat(_key, value);
             }
 #endif
 
             protected override float RuntimeValue
             {
-                get => PlayerPrefs.GetFloat(Key, DefaultValue);
-                set => PlayerPrefs.SetFloat(Key, value);
+                get => PlayerPrefs.GetFloat(_key, DefaultValue);
+                set => PlayerPrefs.SetFloat(_key, value);
             }
         }
     }

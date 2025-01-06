@@ -8,8 +8,8 @@ namespace UnityJigs.Components
 {
     public class PrefabPool<T> : MonoBehaviour where T : MonoBehaviour, IPoolable
     {
-        [SerializeField, Required] private T Prefab = null!;
-        [SerializeField, Required] private Transform CacheParent = null!;
+        [SerializeField, Required] protected T Prefab = null!;
+        [SerializeField, Required] protected Transform CacheParent = null!;
 
         [Space, Header("Storage")]
         [SerializeField, ReadOnly] protected List<T> LeasedObjects = new();
