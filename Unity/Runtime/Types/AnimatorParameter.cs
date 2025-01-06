@@ -61,6 +61,8 @@ namespace UnityJigs.Types
         {
             public Float() : base(AnimatorControllerParameterType.Float) { }
             public void Set(float value) => Check(Id)?.SetFloat(Id, value);
+            public void Set(float value, float dampTime, float deltaTime) => Check(Id)?.SetFloat(
+                Id, value, dampTime, deltaTime);
         }
 
         [Serializable]
