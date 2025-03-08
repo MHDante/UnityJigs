@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace UnityJigs.Extensions
@@ -75,5 +77,50 @@ namespace UnityJigs.Extensions
 
             return sb.Append(">");
         }
+
+        /// <summary>
+        /// Returns the first found custom attribute of type T on this member
+        /// Returns null if none was found
+        /// </summary>
+        public static T GetAttribute<T>(this ICustomAttributeProvider member, bool inherit) where T : Attribute
+        {
+            T[] array = member.GetAttributes<T>(inherit).ToArray<T>();
+            return array != null && array.Length != 0 ? array[0] : default (T);
+        }
+
+        /// <summary>
+        /// Returns the first found non-inherited custom attribute of type T on this member
+        /// Returns null if none was found
+        /// </summary>
+        public static T GetAttribute<T>(this ICustomAttributeProvider member) where T : Attribute
+        {
+            return member.GetAttribute<T>(false);
+        }
+
+        /// <summary>Gets all attributes of the specified generic type.</summary>
+        /// <param name="member">The member.</param>
+        public static IEnumerable<T> GetAttributes<T>(this ICustomAttributeProvider member) where T : Attribute
+        {
+            return member.GetAttributes<T>(false);
+        }
+
+        /// <summary>Gets all attributes of the specified generic type.</summary>
+        /// <param name="member">The member.</param>
+        /// <param name="inherit">If true, specifies to also search the ancestors of element for custom attributes.</param>
+        public static IEnumerable<T> GetAttributes<T>(
+            this ICustomAttributeProvider member,
+            bool inherit)
+            where T : Attribute
+        {
+            try
+            {
+                return Enumerable.Cast<T>(member.GetCustomAttributes(typeof (T), inherit));
+            }
+            catch
+            {
+                return (IEnumerable<T>) new T[0];
+            }
+        }
+
     }
 }

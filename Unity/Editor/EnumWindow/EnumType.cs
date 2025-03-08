@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
 using Sirenix.OdinInspector;
-using Sirenix.Utilities;
 using UnityEditorInternal;
 using UnityJigs.Attributes;
+using UnityJigs.Extensions;
 
 namespace UnityJigs.Editor.EnumWindow
 {
