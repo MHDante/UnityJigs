@@ -12,6 +12,11 @@ namespace UnityJigs.Types
         [SerializeField] private List<T> SerializedValue = new();
         private readonly HashSet<T> _set = new();
 
+        public SerializedSet(IEnumerable<T> list)
+        {
+            foreach (var obj in list) Add(obj);
+        }
+
         public HashSet<T>.Enumerator GetEnumerator() => _set.GetEnumerator();
         public bool Add(T item) => _set.Add(item);
         public void ExceptWith(IEnumerable<T> other) => _set.ExceptWith(other);

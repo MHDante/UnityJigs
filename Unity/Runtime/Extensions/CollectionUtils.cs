@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine.Pool;
+using UnityJigs.Types;
 using Random = UnityEngine.Random;
 using Static = JetBrains.Annotations.RequireStaticDelegateAttribute;
 
@@ -175,13 +176,14 @@ namespace UnityJigs.Extensions
         public static void SetLength<T>(this IList<T> list, int length, Func<T> newElement)
         {
             if (list == null)
-                throw new ArgumentNullException(nameof (list));
+                throw new ArgumentNullException(nameof(list));
             if (length < 0)
                 throw new ArgumentException("Length must be larger than or equal to 0.");
             if (newElement == null)
-                throw new ArgumentNullException(nameof (newElement));
+                throw new ArgumentNullException(nameof(newElement));
             if (list.GetType().IsArray)
-                throw new ArgumentException("Cannot use the SetLength extension method on an array. Use Array.Resize or the ListUtilities.SetLength(ref IList<T> list, int length) overload.");
+                throw new ArgumentException(
+                    "Cannot use the SetLength extension method on an array. Use Array.Resize or the ListUtilities.SetLength(ref IList<T> list, int length) overload.");
             while (list.Count < length)
                 list.Add(newElement());
             while (list.Count > length)
@@ -197,16 +199,27 @@ namespace UnityJigs.Extensions
         public static void SetLength<T>(this IList<T?> list, int length)
         {
             if (list == null)
-                throw new ArgumentNullException(nameof (list));
+                throw new ArgumentNullException(nameof(list));
             if (length < 0)
                 throw new ArgumentException("Length must be larger than or equal to 0.");
             if (list.GetType().IsArray)
-                throw new ArgumentException("Cannot use the SetLength extension method on an array. Use Array.Resize or the ListUtilities.SetLength(ref IList<T> list, int length) overload.");
+                throw new ArgumentException(
+                    "Cannot use the SetLength extension method on an array. Use Array.Resize or the ListUtilities.SetLength(ref IList<T> list, int length) overload.");
             while (list.Count < length)
                 list.Add(default);
             while (list.Count > length)
                 list.RemoveAt(list.Count - 1);
         }
 
+
+        public static SerializedSet<T> ToSerializedSet<T>(this IEnumerable<T> list) => new(list);
+
+        public static SerializedDict<TKey, TValue> ToSerializedDict<T, TKey, TValue>(
+            this IEnumerable<T> list, Func<T, TKey> keySelector, Func<T, TValue> valueSelector) =>
+            SerializedDict<TKey, TValue>.Create(list, keySelector, valueSelector);
+
+        public static SerializedDict<TKey, TValue> ToSerializedDict<TKey, TValue>(
+            this IEnumerable<TKey> keys, Func<TKey, TValue> valueSelector) =>
+            SerializedDict<TKey, TValue>.Create(keys, valueSelector);
     }
 }

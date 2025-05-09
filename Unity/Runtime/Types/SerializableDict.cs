@@ -13,6 +13,22 @@ namespace UnityJigs.Types
         private IDictionary<TKey, TValue> Dictionary => _dictionary;
         [SerializeField] private List<SerializedKvp> SerializedValue = new();
 
+
+        public static SerializedDict<TKey,TValue> Create<T>(IEnumerable<T> list, Func<T,TKey> keySelector, Func<T,TValue> valueSelector)
+        {
+            var dict = new SerializedDict<TKey, TValue>();
+            foreach (var input in list) dict.Add(keySelector(input), valueSelector(input));
+            return dict;
+        }
+
+
+        public static SerializedDict<TKey, TValue> Create(IEnumerable<TKey> list, Func<TKey,TValue> valueSelector)
+        {
+            var dict = new SerializedDict<TKey, TValue>();
+            foreach (var input in list) dict.Add(input, valueSelector(input));
+            return dict;
+        }
+
         public void OnBeforeSerialize()
         {
             SerializedValue.Clear();
@@ -82,5 +98,6 @@ namespace UnityJigs.Types
             public TKey Key;
             public TValue Value;
         }
+
     }
 }
