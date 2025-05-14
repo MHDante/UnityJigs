@@ -82,20 +82,17 @@ namespace UnityJigs.Extensions
         /// Returns the first found custom attribute of type T on this member
         /// Returns null if none was found
         /// </summary>
-        public static T GetAttribute<T>(this ICustomAttributeProvider member, bool inherit) where T : Attribute
+        public static T? GetAttribute<T>(this ICustomAttributeProvider member, bool inherit) where T : Attribute
         {
-            T[] array = member.GetAttributes<T>(inherit).ToArray<T>();
-            return array != null && array.Length != 0 ? array[0] : default (T);
+            var array = member.GetAttributes<T>(inherit).ToArray();
+            return array.Length != 0 ? array[0] : default;
         }
 
         /// <summary>
         /// Returns the first found non-inherited custom attribute of type T on this member
         /// Returns null if none was found
         /// </summary>
-        public static T GetAttribute<T>(this ICustomAttributeProvider member) where T : Attribute
-        {
-            return member.GetAttribute<T>(false);
-        }
+        public static T? GetAttribute<T>(this ICustomAttributeProvider member) where T : Attribute => member.GetAttribute<T>(false);
 
         /// <summary>Gets all attributes of the specified generic type.</summary>
         /// <param name="member">The member.</param>
@@ -112,14 +109,8 @@ namespace UnityJigs.Extensions
             bool inherit)
             where T : Attribute
         {
-            try
-            {
-                return Enumerable.Cast<T>(member.GetCustomAttributes(typeof (T), inherit));
-            }
-            catch
-            {
-                return (IEnumerable<T>) new T[0];
-            }
+            try { return member.GetCustomAttributes(typeof (T), inherit).Cast<T>(); }
+            catch { return Array.Empty<T>(); }
         }
 
     }

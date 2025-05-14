@@ -23,7 +23,7 @@ namespace UnityJigs.Editor.EnumWindow
 
         public EnumType(Type type)
         {
-            _attribute = type.GetAttribute<DesignEnumAttribute>();
+            _attribute = type.GetAttribute<DesignEnumAttribute>() ?? throw new NotSupportedException();
             Name = type.Name;
             Values = Enum.GetValues(type)
                 .Cast<Enum>()

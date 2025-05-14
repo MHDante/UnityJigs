@@ -38,17 +38,18 @@ namespace UnityJigs.Components
 
         protected virtual void Update()
         {
-            using var __ = ListPool<T>.Get(out var toReturn);
-            foreach (var point in LeasedObjects)
-                if (point.ShouldReturnToPool || !point)
-                    toReturn.Add(point);
+            using var __ = ListPool<T?>.Get(out var toReturn);
+            foreach (var obj in LeasedObjects)
+                if (obj.ShouldReturnToPool || !obj)
+                    toReturn.Add(obj);
 
             foreach (var expiredPoint in toReturn)
                 Return(expiredPoint);
         }
 
-        public virtual void Return(T bubble)
+        public virtual void Return(T? bubble)
         {
+            if(ReferenceEquals(bubble, null)) return;
             bubble.Deactivate();
             LeasedObjects.Remove(bubble);
 
