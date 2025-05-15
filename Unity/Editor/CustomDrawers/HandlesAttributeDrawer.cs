@@ -2,6 +2,7 @@ using System;
 using JetBrains.Annotations;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.OdinInspector.Editor.ValueResolvers;
+using Sirenix.Utilities.Editor;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
@@ -27,13 +28,9 @@ namespace UnityJigs.Editor.CustomDrawers
         {
             colorResolver.DrawError();
 
-            var oldC = GUI.color;
-            GUI.color = colorResolver.GetValue();
-            var oldExp = Property.State.Expanded;
-            Property.State.Expanded = EditorGUILayout.Foldout(oldExp, label);
-            if(oldExp != Property.State.Expanded) SceneView.RepaintAll();
-            GUI.color = oldC;
-            if(Property.State.Expanded) CallNextDrawer(null);
+            GUIHelper.PushColor(colorResolver.GetValue());
+            CallNextDrawer(label);
+            GUIHelper.PopColor();
         }
 
         protected override void OnSceneGUI(SceneView sv)
