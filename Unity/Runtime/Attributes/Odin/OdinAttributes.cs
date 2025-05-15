@@ -50,4 +50,17 @@ namespace UnityJigs.Attributes.Odin
         public SyncPaletteAttribute(string? paletteName = null) => PaletteName = paletteName;
         public string? PaletteName { get; }
     }
+
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class HandlesAttribute : Attribute
+    {
+        public readonly string Color;
+        public bool DrawOnlyWhenExpanded = false;
+        public HandlesAttribute(string color = "black", bool drawOnlyWhenExpanded = true)
+        {
+            Color = color;
+            DrawOnlyWhenExpanded = drawOnlyWhenExpanded;
+        }
+    }
+
 }
