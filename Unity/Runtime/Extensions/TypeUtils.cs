@@ -92,21 +92,18 @@ namespace UnityJigs.Extensions
         /// Returns the first found non-inherited custom attribute of type T on this member
         /// Returns null if none was found
         /// </summary>
-        public static T? GetAttribute<T>(this ICustomAttributeProvider member) where T : Attribute => member.GetAttribute<T>(false);
+        public static T? GetAttribute<T>(this ICustomAttributeProvider member) where T : Attribute =>
+            member.GetAttribute<T>(false);
 
         /// <summary>Gets all attributes of the specified generic type.</summary>
         /// <param name="member">The member.</param>
-        public static IEnumerable<T> GetAttributes<T>(this ICustomAttributeProvider member) where T : Attribute
-        {
-            return member.GetAttributes<T>(false);
-        }
+        public static IEnumerable<T> GetAttributes<T>(this ICustomAttributeProvider member) where T : Attribute =>
+            member.GetAttributes<T>(false);
 
         /// <summary>Gets all attributes of the specified generic type.</summary>
         /// <param name="member">The member.</param>
         /// <param name="inherit">If true, specifies to also search the ancestors of element for custom attributes.</param>
-        public static IEnumerable<T> GetAttributes<T>(
-            this ICustomAttributeProvider member,
-            bool inherit)
+        public static IEnumerable<T> GetAttributes<T>(this ICustomAttributeProvider member, bool inherit)
             where T : Attribute
         {
             try { return member.GetCustomAttributes(typeof (T), inherit).Cast<T>(); }
