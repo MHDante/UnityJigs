@@ -38,7 +38,7 @@ namespace UnityJigs.Editor.CustomDrawers
             var target = Property.SerializationRoot.ValueEntry.WeakSmartValue;
             if (target is not Component c) return;
             if(Attribute.DrawOnlyWhenExpanded && !Property.State.Expanded) return;
-            using var _ = new Handles.DrawingScope(colorResolver.GetValue(), c.gameObject.transform.worldToLocalMatrix);
+            using var _ = new Handles.DrawingScope(colorResolver.GetValue(), c.gameObject.transform.localToWorldMatrix);
             var bounds = Property.TryGetTypedValueEntry<Bounds>().SmartValue;
             handleDrawer.size = bounds.size;
             handleDrawer.center = bounds.center;
