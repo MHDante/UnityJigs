@@ -222,4 +222,12 @@ namespace UnityJigs.Extensions
             this IEnumerable<TKey> keys, Func<TKey, TValue> valueSelector) =>
             SerializedDict<TKey, TValue>.Create(keys, valueSelector);
     }
+
+    public static class QueuePool<T>
+    {
+        internal static readonly ObjectPool<Queue<T>> Pool = new(() => new Queue<T>(), actionOnRelease: l => l.Clear());
+        public static Queue<T> Get() => Pool.Get();
+        public static PooledObject<Queue<T>> Get(out Queue<T> value) => Pool.Get(out value);
+        public static void Release(Queue<T> toRelease) => Pool.Release(toRelease);
+    }
 }

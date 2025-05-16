@@ -51,6 +51,7 @@ namespace UnityJigs.Editor.CustomDrawers
             bounds.center = handleDrawer.center;
             bounds.size = handleDrawer.size;
             Property.ValueEntry.WeakSmartValue = bounds;
+            SceneView.RepaintAll();
         }
     }
 }
