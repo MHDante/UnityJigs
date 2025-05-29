@@ -60,9 +60,14 @@ namespace UnityJigs.Types
         public class Float : AnimatorParameter
         {
             public Float() : base(AnimatorControllerParameterType.Float) { }
-            public void Set(float value) => Check(Id)?.SetFloat(Id, value);
-            public void Set(float value, float dampTime, float deltaTime) => Check(Id)?.SetFloat(
-                Id, value, dampTime, deltaTime);
+            public bool IsDamped;
+            public float DampTime = 0.1f;
+            public void Set(bool value, float? deltaTime = null) => Set(value?1:0, deltaTime);
+            public void Set(float value, float? deltaTime = null)
+            {
+                if(IsDamped) Check(Id)?.SetFloat(Id, value, DampTime, deltaTime??Time.deltaTime);
+                else Check(Id)?.SetFloat(Id, value);
+            }
         }
 
         [Serializable]

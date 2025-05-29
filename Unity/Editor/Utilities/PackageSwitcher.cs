@@ -17,7 +17,7 @@ namespace UnityJigs.Editor.Utilities
         public SerializedDict<string, string> LocalToRemotePackages = new();
 
         private const string ManifestPath = "Packages/manifest.json";
-        [Button, HorizontalGroup, MenuItem("Utils/Package Switch To Local")]
+        [Button, HorizontalGroup, MenuItem("Utils/Package/Package Switch To Local")]
         public static void SwitchToLocal()
         {
             var manifestText = File.ReadAllText(ManifestPath);
@@ -29,7 +29,7 @@ namespace UnityJigs.Editor.Utilities
             AssetDatabase.ImportAsset(ManifestPath);
         }
 
-        [Button, HorizontalGroup, MenuItem("Utils/Package Switch To Remote")]
+        [Button, HorizontalGroup, MenuItem("Utils/Package/Package Switch To Remote")]
         public static void SwitchToRemote()
         {
             var manifestText = File.ReadAllText(ManifestPath);

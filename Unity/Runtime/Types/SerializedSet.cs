@@ -12,6 +12,8 @@ namespace UnityJigs.Types
         [SerializeField] private List<T> SerializedValue = new();
         private readonly HashSet<T> _set = new();
 
+        public SerializedSet() { }
+
         public SerializedSet(IEnumerable<T> list)
         {
             foreach (var obj in list) Add(obj);

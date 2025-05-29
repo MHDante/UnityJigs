@@ -13,7 +13,7 @@ using UnityJigs.Types;
 namespace UnityJigs.Editor.CustomDrawers
 {
     [UsedImplicitly]
-    public class AnimatorParameterPropertyDrawer : OdinValueDrawer<AnimatorParameter>
+    public class AnimatorParameterPropertyDrawer : OdinValueDrawer<AnimatorParameter>, IDefinesGenericMenuItems
     {
         private const string? NoParameterLabel = "SELECT A PARAMETER";
         private ValueResolver<Animator>? _animatorResolver;
@@ -30,33 +30,11 @@ namespace UnityJigs.Editor.CustomDrawers
             AnimatorController? animatorController = null;
             var param = ValueEntry.SmartValue;
 
-            Animator? animator;
-            bool foundAnimator = false;
-            if (_animatorResolver != null)
-            {
-                try
-                {
-                    animator = _animatorResolver?.GetValue();
-                }
-                catch
-                {
-                    animator = null;
-                }
+            var foundAnimator = GetAnimator(Property, out var animator);
 
-                foundAnimator = true;
-            }
-            else
-            {
-                var autoAnimProp = Property.Parent.FindChild(
-                    it => it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
-                          it.Info.TypeOfValue == typeof(Animator), false);
-                if(autoAnimProp != null) foundAnimator = true;
-                animator = autoAnimProp?.ValueEntry.WeakSmartValue as Animator;
-            }
-
-            var animProp = Property.FindChild(it => it.Name == nameof(AnimatorParameter.Animator), false);
-            var nameProp = Property.FindChild(it => it.Name == nameof(AnimatorParameter.Name), false);
-            var idProp = Property.FindChild(it => it.Name == nameof(AnimatorParameter.Id), false);
+            var animProp = Property.Children.Get(nameof(AnimatorParameter.Animator));
+            var nameProp = Property.Children.Get(nameof(AnimatorParameter.Name));
+            var idProp = Property.Children.Get(nameof(AnimatorParameter.Id));
             var currentName = (string)nameProp.ValueEntry.WeakSmartValue;
 
             if (foundAnimator)
@@ -101,13 +79,29 @@ namespace UnityJigs.Editor.CustomDrawers
             else if (label.text.StartsWith("Anim")) label.text = " " + label.text[4..];
 
 
+            var isDampedProp = Property.Children.Get(nameof(AnimatorParameter.Float.IsDamped));
+
             SirenixEditorGUI.BeginHorizontalPropertyLayout(label);
             var newIndex = SirenixEditorFields.Dropdown(currentIndex, parameterNames);
+            if (isDampedProp != null)
+            {
+                var isDampedValue = isDampedProp.TryGetTypedValueEntry<bool>();
+                var pressedDamp = SirenixEditorGUI.IconButton(EditorIcons.LoadingBar, tooltip: "AddDampTime");
+                if (pressedDamp) isDampedValue.SmartValue = !isDampedValue.SmartValue;
+                if (isDampedValue.SmartValue)
+                {
+                    var dampTimeProp = Property.Children.Get(nameof(AnimatorParameter.Float.DampTime));
+                    var dampValue = dampTimeProp.TryGetTypedValueEntry<float>();
+                    dampValue.SmartValue = SirenixEditorFields.FloatField(GUIContent.none, dampValue.SmartValue, GUILayout.Width(40));
+                }
+            }
+
             bool canCreate = newIndex <= 0;
             bool pressed = canCreate
                 ? SirenixEditorGUI.IconButton(EditorIcons.Plus, tooltip: "Create Parameter")
                 : SirenixEditorGUI.IconButton(EditorIcons.ArrowRight, tooltip: "See Animator");
             SirenixEditorGUI.EndHorizontalPropertyLayout();
+
 
             if (pressed)
             {
@@ -135,11 +129,61 @@ namespace UnityJigs.Editor.CustomDrawers
             idProp.ValueEntry.WeakSmartValue = paramIds[newIndex];
         }
 
+        private bool GetAnimator(InspectorProperty prop, out Animator? animator)
+        {
+            var foundAnimator = false;
+            if (_animatorResolver != null)
+            {
+                try
+                {
+                    animator = _animatorResolver?.GetValue();
+                }
+                catch
+                {
+                    animator = null;
+                }
+
+                foundAnimator = true;
+            }
+            else
+            {
+                var autoAnimProp = prop.Parent.FindChild(
+                    it => it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
+                          it.Info.TypeOfValue == typeof(Animator), false);
+                if (autoAnimProp != null) foundAnimator = true;
+                animator = autoAnimProp?.ValueEntry.WeakSmartValue as Animator;
+            }
+
+            return foundAnimator;
+        }
+
         private void CreateParameter(AnimatorController animatorController, string propertyName,
             AnimatorControllerParameterType type)
         {
             var name = animatorController.MakeUniqueParameterName(propertyName);
             animatorController.AddParameter(new AnimatorControllerParameter { name = name, type = type });
+        }
+
+        public void PopulateGenericMenu(InspectorProperty property, GenericMenu genericMenu)
+        {
+            var hasAnimator = GetAnimator(property, out var animator);
+            if (!hasAnimator || animator == null) return;
+            genericMenu.AddItem(new GUIContent("Reorder"), false, () =>
+            {
+                var animatorController = animator.runtimeAnimatorController is AnimatorOverrideController oc
+                    ? oc.runtimeAnimatorController as AnimatorController
+                    : animator.runtimeAnimatorController as AnimatorController;
+                if (animatorController == null) return;
+
+                var otherProps = property.Parent.Children
+                    .Where(it => it.Info.TypeOfValue.IsSubclassOf(typeof(AnimatorParameter))).ToList();
+                var otherParams = otherProps.Select(it => it.TryGetTypedValueEntry<AnimatorParameter>().SmartValue)
+                    .ToList();
+                var otherNames = otherParams.Select(it => it.Name).ToList();
+                var animParams = animatorController.parameters;
+                Array.Sort(animParams, (a, b) => otherNames.IndexOf(a.name).CompareTo(otherNames.IndexOf(b.name)));
+                animatorController.parameters = animParams;
+            });
         }
     }
 }
