@@ -3,8 +3,6 @@
     "version": "1.0.0",
     "displayName": "UnityJigs",
     "description": "A collection of shorthands and hacks. Meant to be used with Odin Inspector",
-    "unity": "2024.0",
-    "unityRelease": "13f1",
     "documentationUrl": "https://github.com/MHDante/UnityJigs",
     "dependencies": {
    },
