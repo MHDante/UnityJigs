@@ -98,6 +98,9 @@ namespace UnityJigs.Types
             public TKey Key;
             public TValue Value;
         }
-
     }
 }
+
+#if UNITY
+
+#endif

@@ -33,7 +33,12 @@ namespace UnityJigs.Extensions
             public Vector2Int Current => current;
             private bool isStarted;
 
-            public Enumerator(IntEnumerable2D enumerable) => _enumerable = enumerable;
+            public Enumerator(IntEnumerable2D enumerable)
+            {
+                current = default;
+                isStarted = false;
+                _enumerable = enumerable;
+            }
 
             public bool MoveNext()
             {

@@ -6,7 +6,7 @@ namespace UnityJigs.Editor.Odin
 {
     public static class OdinUtils
     {
-        [return: NotNullIfNotNull(nameof(defaultValue))]
+        [return: NotNullIfNotNull("defaultValue")]
         public static T? GetOrDefault<T>(this PropertyState s, string key, T? defaultValue = default) =>
             s.Exists<T>(key, out _) ? s.Get<T>(key) : defaultValue;
 

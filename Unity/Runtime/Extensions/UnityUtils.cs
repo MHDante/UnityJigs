@@ -87,7 +87,7 @@ namespace UnityJigs.Extensions
         [ThreadStatic] private static GradientColorKey[]? _ColorKeyCache;
         [ThreadStatic] private static GradientAlphaKey[]? _AlphaKeyCache;
 
-        public static Gradient CreateGradient(Color from, Color to, GradientMode mode = GradientMode.PerceptualBlend)
+        public static Gradient CreateGradient(Color from, Color to, GradientMode mode = GradientMode.Blend)
         {
             _ColorKeyCache ??= new GradientColorKey[2];
             _ColorKeyCache[0] = new GradientColorKey(from, 0);

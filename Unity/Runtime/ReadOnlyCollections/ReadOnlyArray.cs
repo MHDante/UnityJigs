@@ -32,10 +32,16 @@ namespace UnityJigs.ReadOnlyCollections
 
         public struct Enumerator : IEnumerator<T>
         {
-            private int _index = -1;
+            private int _index;
             private T[] _list;
-            public Enumerator(T[] list) => _list = list;
             public T Current => _list[_index];
+
+            public Enumerator(T[] list)
+            {
+                _index = -1;
+                _list = list;
+            }
+
             public bool MoveNext() => ++_index < _list.Length;
             public void Reset() => _index = -1;
             object? IEnumerator.Current => Current;

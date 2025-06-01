@@ -74,10 +74,7 @@ namespace UnityJigs.Editor.AssemblyPeeker
             var metaPath = assemblyInfoPath + ".meta";
             if (!File.Exists(metaPath))
             {
-                File.WriteAllText(metaPath, $"""
-                                             fileFormatVersion: 2
-                                             guid: {GUID.Generate().ToString()}
-                                             """);
+                File.WriteAllText(metaPath, $"fileFormatVersion: 2\nguid: {GUID.Generate().ToString()}");
             }
 
             Debug.Log($"Added InternalsVisibleTo attribute for {targetAssemblyName} to {assemblyInfoPath}");

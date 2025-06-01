@@ -13,13 +13,16 @@ namespace UnityJigs.Editor.Odin
 
         private readonly bool _canDrawValueProperty;
         private readonly InspectorProperty _property;
-        private readonly bool _draw = false;
-        private readonly bool _overriden = false;
-        private readonly bool _childOrCollectionOverriden = false;
+        private readonly bool _draw;
+        private readonly bool _overriden;
+        private readonly bool _childOrCollectionOverriden;
 
         public OverrideWrapper(InspectorProperty property)
         {
             _property = property;
+            _draw = false;
+            _overriden = false;
+            _childOrCollectionOverriden = false;
             _canDrawValueProperty = property is { IsTreeRoot: false, SupportsPrefabModifications: true } &&
                                     property.State.Enabled &&
                                     property.State.Visible && property.Tree.PrefabModificationHandler.HasPrefabs &&

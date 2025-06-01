@@ -15,7 +15,7 @@ namespace UnityJigs.Types
         public Toggle(bool enabled, T value) => (Enabled, Value) = (enabled, value);
         public static implicit operator T(Toggle<T> t) => t.Value;
 
-        [return: NotNullIfNotNull(nameof(defaultValue))]
+        [return: NotNullIfNotNull("defaultValue")]
         public T? GetValueOrDefault(T? defaultValue = default) => Enabled ? Value : defaultValue;
     }
 }

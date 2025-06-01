@@ -69,16 +69,24 @@ namespace UnityJigs.Settings
                     RectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, value);
                     break;
                 case SyncTargets.Top:
-                    RectTransform.offsetMax = RectTransform.offsetMax with { y = -value };
+                    var max = RectTransform.offsetMax;
+                    max.y = -value;
+                    RectTransform.offsetMax = max;
                     break;
                 case SyncTargets.Bottom:
-                    RectTransform.offsetMin = RectTransform.offsetMin with { y = value };
+                    var min = RectTransform.offsetMin;
+                    min.y = value;
+                    RectTransform.offsetMin = min;
                     break;
                 case SyncTargets.Left:
-                    RectTransform.offsetMin = RectTransform.offsetMin with { x = value };
+                    var vector2 = RectTransform.offsetMin;
+                    vector2.x = value;
+                    RectTransform.offsetMin = vector2;
                     break;
                 case SyncTargets.Right:
-                    RectTransform.offsetMax = RectTransform.offsetMax with { x = -value };
+                    var offsetMax = RectTransform.offsetMax;
+                    offsetMax.x = -value;
+                    RectTransform.offsetMax = offsetMax;
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(TargetDimension), TargetDimension, null);
