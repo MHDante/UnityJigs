@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using JetBrains.Annotations;
 using Sirenix.OdinInspector;
 using UnityJigs.Attributes.Odin;
 
@@ -18,6 +19,8 @@ namespace UnityJigs.ReadOnlyCollections
         public int Count => Set.Count;
         public bool Contains(T item) => Set.Contains(item);
         public void CopyTo(T[] array, int arrayIndex) => Set.CopyTo(array, arrayIndex);
+
+        [MustDisposeResource]
         public HashSet<T>.Enumerator GetEnumerator() => Set.GetEnumerator();
         public static implicit operator ReadOnlySet<T>(HashSet<T>? set) => new(set);
 

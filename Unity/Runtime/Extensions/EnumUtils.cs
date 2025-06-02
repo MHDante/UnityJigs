@@ -9,6 +9,7 @@ namespace UnityJigs.Extensions
     {
         private static readonly T[] ValueArray = Enum.GetValues(typeof(T)).Cast<T>().ToArray();
         public static IReadOnlyList<T> Values => ValueArray;
+        public static readonly string Name = typeof(T).Name;
 
         public static PooledObject<List<T>> GetPooled(out List<T> list, Func<T, bool>? filter)
         {
@@ -16,5 +17,6 @@ namespace UnityJigs.Extensions
             foreach (var element in ValueArray) list.Add(element);
             return pooled;
         }
+
     }
 }

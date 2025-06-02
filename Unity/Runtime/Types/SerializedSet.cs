@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using JetBrains.Annotations;
 using UnityEngine;
 using UnityJigs.Extensions;
 
@@ -19,6 +20,7 @@ namespace UnityJigs.Types
             foreach (var obj in list) Add(obj);
         }
 
+        [MustDisposeResource]
         public HashSet<T>.Enumerator GetEnumerator() => _set.GetEnumerator();
         public bool Add(T item) => _set.Add(item);
         public void ExceptWith(IEnumerable<T> other) => _set.ExceptWith(other);
@@ -39,7 +41,9 @@ namespace UnityJigs.Types
         public bool IsReadOnly => ((ISet<T>)_set).IsReadOnly;
 
 
+        [MustDisposeResource]
         IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
+        [MustDisposeResource]
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         void ICollection<T>.Add(T item) => _set.Add(item);
 

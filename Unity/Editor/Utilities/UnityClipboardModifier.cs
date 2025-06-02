@@ -13,7 +13,6 @@ namespace UnityJigs.Editor.Utilities
 
         ///<summary>
         /// Expected Suffix of properties such as:
-        /// <see cref="Clipboard.longValue"/>
         /// <see cref="Clipboard.integerValue"/>
         /// <see cref="Clipboard.colorValue"/>
         /// </summary>
