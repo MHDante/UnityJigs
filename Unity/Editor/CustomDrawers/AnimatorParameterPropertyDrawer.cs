@@ -2,12 +2,10 @@ using System;
 using System.Linq;
 using JetBrains.Annotations;
 using Sirenix.OdinInspector.Editor;
-using Sirenix.OdinInspector.Editor.ValueResolvers;
 using Sirenix.Utilities.Editor;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
-using UnityJigs.Attributes;
 using UnityJigs.Types;
 
 namespace UnityJigs.Editor.CustomDrawers
@@ -16,44 +14,23 @@ namespace UnityJigs.Editor.CustomDrawers
     public class AnimatorParameterPropertyDrawer : OdinValueDrawer<AnimatorParameter>, IDefinesGenericMenuItems
     {
         private const string? NoParameterLabel = "SELECT A PARAMETER";
-        private ValueResolver<Animator>? _animatorResolver;
+        private AnimatorResolver _animatorResolver = null!;
 
         protected override void Initialize()
         {
             base.Initialize();
-            var attr = Property.GetAttribute<AnimatorAttribute>();
-            if (attr != null) _animatorResolver = ValueResolver.Get<Animator>(Property, attr.AnimatorPath);
+            _animatorResolver = new(Property, nameof(AnimatorParameter.Animator));
         }
 
         protected override void DrawPropertyLayout(GUIContent label)
         {
-            AnimatorController? animatorController = null;
+
+            var animatorController = _animatorResolver.UpdateAnimatorProp(out var animator);
+
             var param = ValueEntry.SmartValue;
-
-            var foundAnimator = GetAnimator(Property, out var animator);
-
-            var animProp = Property.Children.Get(nameof(AnimatorParameter.Animator));
             var nameProp = Property.Children.Get(nameof(AnimatorParameter.Name));
             var idProp = Property.Children.Get(nameof(AnimatorParameter.Id));
             var currentName = (string)nameProp.ValueEntry.WeakSmartValue;
-
-            if (foundAnimator)
-            {
-                animProp.ValueEntry.WeakSmartValue = animator;
-            }
-            else
-            {
-                animProp.Draw();
-                animator = animProp.ValueEntry.WeakSmartValue as Animator;
-            }
-
-            if (animator != null)
-            {
-                animatorController = animator.runtimeAnimatorController is AnimatorOverrideController oc
-                    ? oc.runtimeAnimatorController as AnimatorController
-                    : animator.runtimeAnimatorController as AnimatorController;
-            }
-
             if (animatorController == null)
             {
                 var newName = SirenixEditorFields.TextField(label, currentName);
@@ -129,33 +106,6 @@ namespace UnityJigs.Editor.CustomDrawers
             idProp.ValueEntry.WeakSmartValue = paramIds[newIndex];
         }
 
-        private bool GetAnimator(InspectorProperty prop, out Animator? animator)
-        {
-            var foundAnimator = false;
-            if (_animatorResolver != null)
-            {
-                try
-                {
-                    animator = _animatorResolver?.GetValue();
-                }
-                catch
-                {
-                    animator = null;
-                }
-
-                foundAnimator = true;
-            }
-            else
-            {
-                var autoAnimProp = prop.Parent.FindChild(
-                    it => it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
-                          it.Info.TypeOfValue == typeof(Animator), false);
-                if (autoAnimProp != null) foundAnimator = true;
-                animator = autoAnimProp?.ValueEntry.WeakSmartValue as Animator;
-            }
-
-            return foundAnimator;
-        }
 
         private void CreateParameter(AnimatorController animatorController, string propertyName,
             AnimatorControllerParameterType type)
@@ -166,7 +116,7 @@ namespace UnityJigs.Editor.CustomDrawers
 
         public void PopulateGenericMenu(InspectorProperty property, GenericMenu genericMenu)
         {
-            var hasAnimator = GetAnimator(property, out var animator);
+            var hasAnimator = _animatorResolver.GetAnimator(property, out var animator);
             if (!hasAnimator || animator == null) return;
             genericMenu.AddItem(new GUIContent("Reorder"), false, () =>
             {

@@ -84,4 +84,5 @@ namespace UnityJigs.Types
             public void Set() => Check(Id)?.SetTrigger(Id);
         }
     }
+
 }
