@@ -29,6 +29,9 @@ namespace UnityJigs.Extensions
             }
         }
 
+        public static float NormalizedTimeClamp01(this AnimatorStateInfo state) =>
+            Mathf.Clamp01(state.normalizedTime);
+
         public static Vector2 WithX(this Vector2 v, float x) => new(x, v.y);
         public static Vector2 WithY(this Vector2 v, float y) => new(v.x, y);
         public static Vector3 WithZ(this Vector2 v, float z) => new(v.x, v.y, z);
