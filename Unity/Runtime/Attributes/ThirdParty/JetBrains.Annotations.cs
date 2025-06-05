@@ -1750,6 +1750,8 @@ namespace JetBrains.Annotations
 
   #endregion
 
+#if !UNITY_6000_0_OR_NEWER
+
   /// <summary>
   /// Indicates that the resource disposal must be handled at the use site,
   /// meaning that the resource ownership is transferred to the caller.
@@ -1782,5 +1784,6 @@ namespace JetBrains.Annotations
     /// </summary>
     public bool Value { get; }
   }
+#endif
 
 }

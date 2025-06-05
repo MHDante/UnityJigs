@@ -170,9 +170,7 @@ namespace UnityJigs.Extensions
             return ray.GetPoint(dist);
         }
 
-        public static T? SafeNull<T>(this T? source) where T : Object =>
-            // ReSharper disable once MergeConditionalExpression
-            ReferenceEquals(source, null) ? null : source;
+        public static T? SafeNull<T>(this T? source) where T : Object => source ? source : null;
 
 
         public static void ClampMin(this ref float source, float min)
