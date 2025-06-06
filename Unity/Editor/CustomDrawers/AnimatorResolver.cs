@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.OdinInspector.Editor.ValueResolvers;
 using UnityEditor.Animations;
@@ -68,11 +70,33 @@ namespace UnityJigs.Editor.CustomDrawers
             }
             else
             {
-                var autoAnimProp = prop.Parent.FindChild(
+                var autoAnimProp = prop.Parent.Children.FirstOrDefault(
                     it => it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
-                          it.Info.TypeOfValue == typeof(Animator), false);
+                          it.Info.TypeOfValue == typeof(Animator));
                 if (autoAnimProp != null) foundAnimator = true;
                 animator = autoAnimProp?.ValueEntry.WeakSmartValue as Animator;
+            }
+
+            if (!foundAnimator)
+            {
+                var obj = prop.Parent.ValueEntry.WeakSmartValue;
+                var objProps = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                var animProp = objProps.FirstOrDefault(it =>
+                    it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
+                    it.PropertyType== typeof(Animator) && it.CanRead);
+                if (animProp != null) foundAnimator = true;
+                animator = (Animator?)animProp?.GetValue(obj);
+            }
+
+            if (!foundAnimator)
+            {
+                var obj = prop.Parent.ValueEntry.WeakSmartValue;
+                var objProps = obj.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                var animProp = objProps.FirstOrDefault(it =>
+                    it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
+                    it.FieldType== typeof(Animator));
+                if (animProp != null) foundAnimator = true;
+                animator = (Animator?)animProp?.GetValue(obj);
             }
 
             return foundAnimator;
