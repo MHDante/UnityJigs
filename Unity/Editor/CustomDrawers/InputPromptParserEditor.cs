@@ -11,7 +11,7 @@ using UnityJigs.Extensions;
 
 namespace UnityJigs.Editor.CustomDrawers
 {
-    [CustomEditor(typeof(InputPromptParser))]
+    [CustomEditor(typeof(KenneyInputPrompts))]
     public class InputPromptParserEditor : OdinEditor
     {
         public override void OnInspectorGUI()
@@ -21,14 +21,14 @@ namespace UnityJigs.Editor.CustomDrawers
             {
                 var folder = EditorUtility.OpenFolderPanel("Select Directory", "", "");
                 folder = Path.GetRelativePath(Path.GetDirectoryName(Application.dataPath), folder);
-                ParseFiles((InputPromptParser)serializedObject.targetObject, folder);
+                ParseFiles((KenneyInputPrompts)serializedObject.targetObject, folder);
             }
 
             base.OnInspectorGUI();
         }
 
         [Button, PropertyOrder(-1)]
-        public static void ParseFiles(InputPromptParser self, string folderPath)
+        public static void ParseFiles(KenneyInputPrompts self, string folderPath)
         {
             self.Platforms.Clear();
 
@@ -44,26 +44,20 @@ namespace UnityJigs.Editor.CustomDrawers
                 var defaultPath = xmlFiles.FirstOrDefault(it => it.EndsWith("default.xml"));
                 var doublePath = xmlFiles.FirstOrDefault(it => it.EndsWith("double.xml"));
 
-                var platform = new InputPromptPlatform
-                {
-                    XmlFiles = new InputPromptXmlPair()
-                    {
-                        DefaultSpriteXml = AssetDatabase.LoadAssetAtPath<TextAsset>(defaultPath),
-                        DoubleSpriteXml = AssetDatabase.LoadAssetAtPath<TextAsset>(doublePath)
-                    },
-                    PlatformId = platformName
-                };
-                GetPlatformButtons(platform);
+                var defaultSpriteXml = AssetDatabase.LoadAssetAtPath<TextAsset>(defaultPath);
+                var doubleSpriteXml = AssetDatabase.LoadAssetAtPath<TextAsset>(doublePath);
+                var platform = new InputPromptPlatform { PlatformId = platformName };
+                GetPlatformButtons(platform,defaultSpriteXml, doubleSpriteXml);
                 self.Platforms.Add(platform);
             }
 
             EditorUtility.SetDirty(self);
         }
 
-        private static void GetPlatformButtons(InputPromptPlatform platform)
+        private static void GetPlatformButtons(InputPromptPlatform platform, TextAsset defaultSpriteXml, TextAsset doubleSpriteXml)
         {
-            var spritesDefault = ParseFile(platform.XmlFiles.DefaultSpriteXml, SpriteAlignment.Center);
-            var spritesDouble = ParseFile(platform.XmlFiles.DoubleSpriteXml, SpriteAlignment.Center);
+            var spritesDefault = ParseFile(defaultSpriteXml, SpriteAlignment.Center);
+            var spritesDouble = ParseFile(doubleSpriteXml, SpriteAlignment.Center);
 
             var ct = Mathf.Max(spritesDefault.Count, spritesDouble.Count);
             for (var i = 0; i < ct; i++)
@@ -78,7 +72,7 @@ namespace UnityJigs.Editor.CustomDrawers
                 {
                     ImageDefault = spriteDefault,
                     ImageDouble = spriteDouble,
-                    ImageId = spriteDefault.name,
+                    ButtonId = spriteDefault.name,
                     PlatformId = platform.PlatformId
                 };
 
