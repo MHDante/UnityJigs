@@ -13,6 +13,8 @@ namespace UnityJigs.Types
 
         public void SetWeight(float w)
         {
+            if(string.IsNullOrEmpty(Name)) return;
+
             if (Animator == null)
             {
                 if (!_hasLogged && Application.isEditor)
