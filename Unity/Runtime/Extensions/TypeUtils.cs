@@ -110,5 +110,10 @@ namespace UnityJigs.Extensions
             catch { return Array.Empty<T>(); }
         }
 
+        public static bool HasDefaultConstructor(this Type self) =>
+            self == typeof (string) ||
+            self.IsArray ||
+            self.IsValueType ||
+            self.GetConstructor(Type.EmptyTypes) != null;
     }
 }

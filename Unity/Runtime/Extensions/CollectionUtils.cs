@@ -33,7 +33,7 @@ namespace UnityJigs.Extensions
             return item;
         }
         public static V GetOrAddNew<K,V>(this IDictionary<K,V> dict, K key) where V : new() =>
-            dict.TryGetValue(key, out var val) ? val : dict[key] = val;
+            dict.TryGetValue(key, out var val) ? val : dict[key] = new();
 
         public static bool AddIfNotNull<T>(this ICollection<T> list, T? item)
         {
