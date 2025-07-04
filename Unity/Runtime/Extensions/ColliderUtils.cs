@@ -28,7 +28,7 @@ namespace UnityJigs.Extensions
                     return Physics.OverlapSphereNonAlloc(sCentre, sRadius, results, layerMask, qti);
                 case CapsuleCollider c:
                     var cPt1 = c.transform.TransformPoint(c.center + c.height * .5f * Vector3.up);
-                    var cPt2 = c.transform.TransformPoint(c.center + c.height * .5f * Vector3.up);
+                    var cPt2 = c.transform.TransformPoint(c.center - c.height * .5f * Vector3.up);
                     var cRadius = c.transform.lossyScale.x * c.radius;
                     if (showDebug) GizmoDrawer.DrawCapsule(cPt1, cPt2, cRadius);
                     return Physics.OverlapCapsuleNonAlloc(cPt1, cPt2, cRadius, results, layerMask, qti);
