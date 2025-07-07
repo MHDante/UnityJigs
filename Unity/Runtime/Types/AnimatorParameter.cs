@@ -82,6 +82,7 @@ namespace UnityJigs.Types
         {
             public Trigger() : base(AnimatorControllerParameterType.Trigger) { }
             public void Set() => Check(Id)?.SetTrigger(Id);
+            public void Reset() => Check(Id)?.ResetTrigger(Id);
         }
     }
 
