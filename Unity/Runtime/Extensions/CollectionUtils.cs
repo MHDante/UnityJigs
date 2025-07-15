@@ -32,8 +32,12 @@ namespace UnityJigs.Extensions
             list.Add(item);
             return item;
         }
-        public static V GetOrAddNew<K,V>(this IDictionary<K,V> dict, K key) where V : new() =>
+
+        public static V GetOrAddNew<K, V>(this IDictionary<K, V> dict, K key) where V : new() =>
             dict.TryGetValue(key, out var val) ? val : dict[key] = new();
+
+        public static V GetOrAdd<K, V>(this IDictionary<K, V> dict, K key, Func<V> addFn) =>
+            dict.TryGetValue(key, out var val) ? val : dict[key] = addFn();
 
         public static bool AddIfNotNull<T>(this ICollection<T> list, T? item)
         {
@@ -161,6 +165,7 @@ namespace UnityJigs.Extensions
 
         public static T? GetSafe<T>(this IReadOnlyList<T>? list, int index) =>
             list == null || list.Count <= index ? default : list[index];
+
         public static T? GetSafe<T>(this IReadOnlyList<T>? list, int? index) =>
             list == null || index == null || list.Count <= index ? default : list[index.Value];
 
