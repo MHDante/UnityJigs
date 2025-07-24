@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -50,24 +49,15 @@ namespace UnityJigs.Editor.Utilities
             {
                 var parent = obj.transform;
                 Undo.RecordObject(parent, "Freeze transforms" );
-                Vector3 parentScale = parent.localScale;
-                Quaternion parentRotation = parent.localRotation;
-                List<Vector3> positions = new();
-                foreach (Transform child in parent)
-                {
-                    Undo.RecordObject(child, "Freeze transforms" );
-                    child.localRotation = parentRotation * child.localRotation;
-                    child.localScale = Vector3.Scale(child.localScale, parentScale);
-                    positions.Add(child.position);
-                }
-
+                var children = new List<Transform>();
+                foreach (Transform child in parent) children.Add(child);
+                foreach (var child in children) child.SetParent(null, true);
+                
                 parent.localScale = Vector3.one;
                 parent.localRotation = Quaternion.identity;
-                int i = 0;
-                foreach (Transform child in parent)
+                foreach (Transform child in children)
                 {
-                    child.position = positions[0];
-                    i++;
+                    child.SetParent(parent, true);
                     EditorUtility.SetDirty(child);
                 }
                 EditorUtility.SetDirty(parent);
