@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using Sirenix.OdinInspector.Editor;
+using UnityEditor;
 
 namespace UnityJigs.Editor.Odin
 {
@@ -31,6 +32,13 @@ namespace UnityJigs.Editor.Odin
 
         public static bool Toggle(this PropertyState s, string key, bool initialValue = false, bool persistent = false) =>
             s.SetOrCreate(key, !s.GetOrDefault(key, initialValue), persistent);
+
+        public static SerializedProperty ToSerializedProperty(this InspectorProperty inspectorProperty)
+        {
+            string unityPropertyPath = inspectorProperty.UnityPropertyPath;
+            return inspectorProperty.Tree.UnitySerializedObject.FindProperty(unityPropertyPath);
+        }
+
     }
 
 }

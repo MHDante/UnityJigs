@@ -49,8 +49,31 @@ namespace UnityJigs.Extensions
         public static Vector3 Multiply(this Vector3 a, Vector3 b) => new(a.x * b.x, a.y * b.y, a.z * b.z);
         public static Color WithAlpha(this Color c, float a) => new(c.r, c.g, c.b, a);
 
-        public static float Clamp01(this float t) => Mathf.Clamp01(t);
+        public static bool MinMaxContains(this Vector2 minMax, float v, bool minInclusive = true, bool maxInclusive = true)
+        {
+            if (minInclusive)
+            {
+                if (!(v >= minMax.x)) return false;
+            }
+            else
+            {
+                if (!(v > minMax.x)) return false;
+            }
 
+            if (maxInclusive)
+            {
+                if (!(v <= minMax.y)) return false;
+            }
+            else
+            {
+
+                if (!(v < minMax.y)) return false;
+            }
+
+            return true;
+        }
+
+        public static float Clamp01(this float t) => Mathf.Clamp01(t);
         public static T GetSaveData<T>(ref T? singletonField, string fileName) where T : class, new()
         {
             if (singletonField != null) return singletonField;
