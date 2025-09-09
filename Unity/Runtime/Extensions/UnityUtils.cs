@@ -74,6 +74,7 @@ namespace UnityJigs.Extensions
         }
 
         public static float Clamp01(this float t) => Mathf.Clamp01(t);
+        public static float Abs(this float t) => Mathf.Abs(t);
         public static T GetSaveData<T>(ref T? singletonField, string fileName) where T : class, new()
         {
             if (singletonField != null) return singletonField;
