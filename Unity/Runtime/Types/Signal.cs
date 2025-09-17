@@ -8,6 +8,7 @@ namespace UnityJigs.Types
     {
         public event Action? OnChange;
         private ManualResetValueTaskSourceCore<bool> _event;
+        public short Nonce => _event.Version;
 
         public bool CheckChange(ref short nonce)
         {
@@ -26,7 +27,7 @@ namespace UnityJigs.Types
         }
 
         public ValueTask WaitAsync() => new(this, _event.Version);
-        public void GetResult(short token) => _event.GetResult(token);
+        public void GetResult(short token) { }
         public ValueTaskSourceStatus GetStatus(short token) => _event.GetStatus(token);
 
         public void OnCompleted(Action<object> continuation, object state, short token,

@@ -196,6 +196,7 @@ namespace UnityJigs.Extensions
 
         public static T? SafeNull<T>(this T? source) where T : Object => source ? source : null;
 
+        public static float Diff(this float a, float b) => Mathf.Abs(a - b);
 
         public static void ClampMin(this ref float source, float min)
         {
