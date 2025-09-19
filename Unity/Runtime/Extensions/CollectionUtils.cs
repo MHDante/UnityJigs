@@ -163,11 +163,11 @@ namespace UnityJigs.Extensions
             }
         }
 
-        public static T? GetSafe<T>(this IReadOnlyList<T>? list, int index) =>
-            list == null || list.Count <= index ? default : list[index];
+        public static T? GetSafe<T>(this IReadOnlyList<T>? list, int index, T? defaultVal = default) =>
+            list == null || list.Count <= index ? defaultVal : list[index];
 
-        public static T? GetSafe<T>(this IReadOnlyList<T>? list, int? index) =>
-            list == null || index == null || list.Count <= index ? default : list[index.Value];
+        public static T? GetSafe<T>(this IReadOnlyList<T>? list, int? index, T? defaultVal = default) =>
+            list == null || index == null || list.Count <= index ? defaultVal : list[index.Value];
 
 
         public static void AddRange<T>(this HashSet<T> hashSet, IEnumerable<T> range)

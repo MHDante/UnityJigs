@@ -1,0 +1,22 @@
+{
+    "name": "UnityJigs.Cinemachine.Editor",
+    "rootNamespace": "UnityJigs.Cinemachine.Editor",
+    "references": [
+        "GUID:5b6b2ce991c96964ab56dff314ecb2e0",
+        "GUID:d0457c3aa5572b3478afbf1dbd99a3e7",
+        "GUID:7e6047755ba40ee48b6fcafcdf7ba961",
+        "GUID:4307f53044263cf4b835bd812fc161a4",
+        "GUID:ba8c092d026123a418fb4bfb797a7bd8"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
