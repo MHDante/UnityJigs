@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using JetBrains.Annotations;
 using UnityEngine.Pool;
 using UnityJigs.Types;
 using Random = UnityEngine.Random;
@@ -38,6 +39,9 @@ namespace UnityJigs.Extensions
 
         public static V GetOrAdd<K, V>(this IDictionary<K, V> dict, K key, Func<V> addFn) =>
             dict.TryGetValue(key, out var val) ? val : dict[key] = addFn();
+
+        public static V GetOrAdd<K, V>(this IDictionary<K, V> dict, K key, V value) =>
+            dict.TryGetValue(key, out var val) ? val : dict[key] = value;
 
         public static bool AddIfNotNull<T>(this ICollection<T> list, T? item)
         {
@@ -230,6 +234,50 @@ namespace UnityJigs.Extensions
         public static SerializedDict<TKey, TValue> ToSerializedDict<TKey, TValue>(
             this IEnumerable<TKey> keys, Func<TKey, TValue> valueSelector) =>
             SerializedDict<TKey, TValue>.Create(keys, valueSelector);
+
+        [MustDisposeResource]
+        public static PooledObject<List<T>> FilterPooled<T>(this List<T> source, out List<T> list,
+            [Static] Predicate<T> filter)
+        {
+            var pool = ListPool<T>.Get(out list);
+            foreach (var item in source)
+                if (filter(item))
+                    list.Add(item);
+            return pool;
+        }
+
+        [MustDisposeResource]
+        public static PooledObject<List<T>> FilterPooled<T>(this HashSet<T> source, out List<T> list,
+            [Static] Predicate<T> filter)
+        {
+            var pool = ListPool<T>.Get(out list);
+            foreach (var item in source)
+                if (filter(item))
+                    list.Add(item);
+            return pool;
+        }
+
+        [MustDisposeResource]
+        public static PooledObject<List<TResult>> FilterCastPooled<TSource, TResult>(this HashSet<TSource> source,
+            out List<TResult> list)
+        {
+            var pool = ListPool<TResult>.Get(out list);
+            foreach (var item in source)
+                if(item is TResult result)
+                    list.Add(result);
+            return pool;
+        }
+
+        [MustDisposeResource]
+        public static PooledObject<List<TResult>> FilterCastPooled<TSource, TResult>(this List<TSource> source,
+            out List<TResult> list)
+        {
+            var pool = ListPool<TResult>.Get(out list);
+            foreach (var item in source)
+                if(item is TResult result)
+                    list.Add(result);
+            return pool;
+        }
     }
 
     public static class QueuePool<T>

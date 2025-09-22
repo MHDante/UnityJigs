@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Sirenix.OdinInspector;
+using UnityEngine;
 
 namespace UnityJigs.Attributes.Odin
 {
@@ -62,5 +63,8 @@ namespace UnityJigs.Attributes.Odin
             DrawOnlyWhenExpanded = drawOnlyWhenExpanded;
         }
     }
+
+
+    public class DrawWithOdinAttribute : PropertyAttribute { }
 
 }

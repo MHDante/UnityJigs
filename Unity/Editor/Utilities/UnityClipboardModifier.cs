@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using UnityEditor;
 using UnityEngine;
+// ReSharper disable InvalidXmlDocComment
 
 namespace UnityJigs.Editor.Utilities
 {
@@ -13,16 +13,16 @@ namespace UnityJigs.Editor.Utilities
 
         ///<summary>
         /// Expected Suffix of properties such as:
-        /// <see cref="Clipboard.integerValue"/>
-        /// <see cref="Clipboard.colorValue"/>
+        /// <see cref="UnityEditor.Clipboard.integerValue"/>
+        /// <see cref="UnityEditor.Clipboard.colorValue"/>
         /// </summary>
         const string ValueSuffix = "Value";
 
         ///<summary>
         /// Expected Prefix of properties such as:
-        /// <see cref="Clipboard.hasBool"/>
-        /// <see cref="Clipboard.hasGuid"/>
-        /// <see cref="Clipboard.hasHash128"/>
+        /// <see cref="UnityEditor.Clipboard.hasBool"/>
+        /// <see cref="UnityEditor.Clipboard.hasGuid"/>
+        /// <see cref="UnityEditor.Clipboard.hasHash128"/>
         /// </summary>
         const string HasPrefix = "has";
 
