@@ -1,0 +1,17 @@
+{
+  "name": "UnityJigs.Tests",
+  "rootNamespace": "UnityJigs.Tests",
+  "references": [
+    "UnityJigs"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

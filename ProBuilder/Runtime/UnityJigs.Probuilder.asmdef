@@ -1,16 +1,16 @@
 {
-    "name": "UnityJigs.Cinemachine",
-    "rootNamespace": "UnityJigs.Cinemachine",
+    "name": "UnityJigs.Probuilder",
+    "rootNamespace": "UnityJigs.Behaviour",
     "references": [
         "GUID:5b6b2ce991c96964ab56dff314ecb2e0",
-        "GUID:4307f53044263cf4b835bd812fc161a4"
+        "GUID:1826c0224c0d048b88112c79bbb0cd85"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": true,
     "overrideReferences": false,
     "precompiledReferences": [],
-    "autoReferenced": true,
+    "autoReferenced": false,
     "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false
