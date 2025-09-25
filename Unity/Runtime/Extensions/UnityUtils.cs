@@ -198,6 +198,9 @@ namespace UnityJigs.Extensions
 
         public static float Diff(this float a, float b) => Mathf.Abs(a - b);
 
+        public static float Cross(this Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
+
+
         public static void ClampMin(this ref float source, float min)
         {
             if (source < min) source = min;

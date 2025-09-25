@@ -1,10 +1,11 @@
 using System.Collections.Generic;
+using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.ProBuilder;
 using UnityEngine.Pool;
-using UnityJigs.Colliders;
+using UnityJigs.Types;
 
-namespace UnityJigs.ProBuilderAdapters
+namespace UnityJigs.ProBuilder
 {
     public class PolyShapeCompositeCollider : CompositeColliderGenerator
     {
@@ -12,7 +13,8 @@ namespace UnityJigs.ProBuilderAdapters
 
         protected override (List<Vector2>, float) GetSource()
         {
-            if (SourceShape == null) SourceShape = GetComponentInParent<PolyShape>();
+            if (SourceShape == null)
+                SourceShape = GetComponentInParent<PolyShape>();
             if (SourceShape == null || SourceShape.controlPoints == null || SourceShape.controlPoints.Count < 3)
                 return (new List<Vector2>(), 0);
 
@@ -23,15 +25,18 @@ namespace UnityJigs.ProBuilderAdapters
             if (pts.Count >= 3 && SignedArea(pts) < 0)
                 pts.Reverse();
 
-            var rootMc = SourceShape.GetComponent<MeshCollider>();
-            if (rootMc) rootMc.enabled = false;
+            if (Application.IsPlaying(this))
+            {
+                var rootMc = SourceShape.GetComponent<MeshCollider>();
+                if (rootMc) rootMc.enabled = false;
+            }
 
             var stable = new List<Vector2>(pts.Count);
             stable.AddRange(pts);
             return (stable, SourceShape.extrude);
         }
 
-        static float SignedArea(List<Vector2> poly)
+        private static float SignedArea(List<Vector2> poly)
         {
             var a = 0f;
             for (var i = 0; i < poly.Count; i++)
@@ -42,5 +47,27 @@ namespace UnityJigs.ProBuilderAdapters
             }
             return 0.5f * a;
         }
+
+        [Button]
+        private void PrintPolyShapePoints()
+        {
+            if (SourceShape == null)
+                SourceShape = GetComponentInParent<PolyShape>();
+            if (SourceShape == null || SourceShape.controlPoints == null)
+            {
+                Debug.LogWarning("No PolyShape found.");
+                return;
+            }
+
+            var msg = "PolyShape points:\n";
+            for (int i = 0; i < SourceShape.controlPoints.Count; i++)
+            {
+                var p = SourceShape.controlPoints[i];
+                msg += $"    new Vector2({p.x}f, {p.z}f),\n";
+            }
+
+            Debug.Log(msg);
+        }
+
     }
 }

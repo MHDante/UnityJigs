@@ -1,44 +1,91 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Pool;
-using UnityJigs.Geometry;
+using Sirenix.OdinInspector;
+using UnityJigs.Extensions;
 
-namespace UnityJigs.Colliders
+namespace UnityJigs.Types
 {
     [ExecuteInEditMode]
     public abstract class CompositeColliderGenerator : MonoBehaviour
     {
-        int _lastHash;
+        [SerializeField] private bool IsTrigger;
+        [SerializeField] private PhysicsMaterial? Material;
+
+        private string? _error;
+
+        private int _lastHash;
+        private int _lastCount;
+        public List<MeshCollider> Colliders = new();
+        private readonly Queue<Mesh> _meshPool = new();
 
         protected abstract (List<Vector2> polygon, float height) GetSource();
 
-        void Update()
+        private void Update()
         {
-            if (Application.isPlaying) return;
-
+            Colliders.RemoveAll(static it => !it);
             var hash = ComputeHash();
-            if (hash != _lastHash)
+            if (hash != _lastHash || Colliders.Count != _lastCount || Colliders.Count == 0)
             {
                 _lastHash = hash;
-                Rebuild();
+                TryRebuild();
+                _lastCount = Colliders.Count;
             }
         }
 
-        public void Rebuild()
+        private void OnValidate() => ApplyColliderSettings();
+
+        private void OnEnable() => SetCollidersActive(true);
+        private void OnDisable() => SetCollidersActive(false);
+
+
+
+        [ShowInInspector, InfoBox("$" + nameof(_error), InfoMessageType.Error, VisibleIf = "@!string.IsNullOrEmpty(" + nameof(_error) + ")")]
+        private void TryRebuild()
         {
-            // clear existing children
-            using var _1 = ListPool<GameObject>.Get(out var toDelete);
-            foreach (Transform t in transform) toDelete.Add(t.gameObject);
-            foreach (var go in toDelete) DestroyImmediate(go);
+            try
+            {
+                Rebuild();
+                _error = null;
+            }
+            catch (System.Exception ex)
+            {
+                if (_error != ex.Message)
+                {
+                    _error = ex.Message;
+                    Debug.LogError($"[{name}] Collider rebuild failed: {_error}", this);
+                }
+            }
+        }
+
+        private void Rebuild()
+        {
+            var isPlaying = Application.IsPlaying(this);
+            Colliders.RemoveAll(static it => !it);
+
+            foreach (var mc in Colliders)
+            {
+                if (mc.sharedMesh != null && isPlaying)
+                    _meshPool.Enqueue(mc.sharedMesh);
+
+                if (isPlaying)
+                    Destroy(mc.gameObject);
+                else
+                    DestroyImmediate(mc.gameObject);
+            }
+
+            Colliders.Clear();
 
             var (polygon, height) = GetSource();
             if (polygon.Count < 3) return;
 
-            using var _2 = ListPool<List<Vector2>>.Get(out var convexPolys);
+            using var _1 = ListPool<List<Vector2>>.Get(out var convexPolys);
             ConvexDecomposition2D.Decompose(polygon, convexPolys);
 
             foreach (var poly in convexPolys)
                 CreateConvexPrism(poly, height);
+
+            ApplyColliderSettings();
         }
 
         protected virtual void CreateConvexPrism(List<Vector2> poly2D, float height)
@@ -58,35 +105,77 @@ namespace UnityJigs.Colliders
 
             for (var i = 1; i < n - 1; i++)
             {
-                tris.Add(0); tris.Add(i); tris.Add(i + 1);
+                tris.Add(0);
+                tris.Add(i);
+                tris.Add(i + 1);
             }
 
             for (var i = 1; i < n - 1; i++)
             {
-                tris.Add(n); tris.Add(n + i + 1); tris.Add(n + i);
+                tris.Add(n);
+                tris.Add(n + i + 1);
+                tris.Add(n + i);
             }
 
             for (var i = 0; i < n; i++)
             {
                 var j = (i + 1) % n;
-                tris.Add(i); tris.Add(j); tris.Add(n + i);
-                tris.Add(j); tris.Add(n + j); tris.Add(n + i);
+                tris.Add(i);
+                tris.Add(j);
+                tris.Add(n + i);
+                tris.Add(j);
+                tris.Add(n + j);
+                tris.Add(n + i);
             }
 
-            var mesh = new Mesh { vertices = verts, triangles = tris.ToArray() };
+            var mesh = GetMesh();
+            mesh.Clear();
+            mesh.vertices = verts;
+            mesh.triangles = tris.ToArray();
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
 
-            var child = new GameObject("ConvexPiece");
+            var child = new GameObject($"ConvexPiece_{Colliders.Count}");
             child.transform.SetParent(transform, false);
             child.AddComponent<MeshFilter>().sharedMesh = mesh;
             child.AddComponent<MeshRenderer>().enabled = false;
+
             var mc = child.AddComponent<MeshCollider>();
             mc.sharedMesh = mesh;
             mc.convex = true;
+            Colliders.Add(mc);
         }
 
-        int ComputeHash()
+        private Mesh GetMesh()
+        {
+            if (Application.IsPlaying(this))
+            {
+                var mesh = _meshPool.Count > 0 ? _meshPool.Dequeue() : new Mesh();
+                mesh.MarkDynamic();
+                return mesh;
+            }
+
+            return new Mesh(); // fresh mesh in edit mode
+        }
+
+        private void ApplyColliderSettings()
+        {
+            foreach (var mc in Colliders)
+            {
+                if (!mc) continue;
+                mc.isTrigger = IsTrigger;
+                mc.sharedMaterial = Material;
+            }
+        }
+
+        private void SetCollidersActive(bool active)
+        {
+            foreach (var mc in Colliders)
+                if (mc && mc.gameObject)
+                    mc.gameObject.SetActive(active);
+        }
+
+        private int ComputeHash()
         {
             var (polygon, height) = GetSource();
             unchecked
@@ -98,6 +187,7 @@ namespace UnityJigs.Colliders
                     hash = hash * 31 + p.x.GetHashCode();
                     hash = hash * 31 + p.y.GetHashCode();
                 }
+
                 return hash;
             }
         }
