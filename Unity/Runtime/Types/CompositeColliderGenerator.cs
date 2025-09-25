@@ -165,6 +165,7 @@ namespace UnityJigs.Types
                 if (!mc) continue;
                 mc.isTrigger = IsTrigger;
                 mc.sharedMaterial = Material;
+                mc.gameObject.layer = gameObject.layer;
             }
         }
 
