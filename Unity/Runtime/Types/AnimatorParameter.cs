@@ -10,15 +10,14 @@ namespace UnityJigs.Types
         public string Name;
         public int Id;
 
-        public AnimatorControllerParameterType Type { get; }
+        public abstract AnimatorControllerParameterType Type { get; }
         [SerializeField] public Animator? Animator;
         private bool _hasLogged;
 
-        private AnimatorParameter(AnimatorControllerParameterType type, string name)
+        private AnimatorParameter(string name)
         {
             Name = name;
             if (!string.IsNullOrEmpty(name)) Id = Animator.StringToHash(name);
-            Type = type;
         }
 
         // ReSharper disable Unity.PerformanceAnalysis
@@ -45,7 +44,8 @@ namespace UnityJigs.Types
         [Serializable]
         public class Int : AnimatorParameter
         {
-            public Int(string name = "") : base(AnimatorControllerParameterType.Int, name) { }
+            public override AnimatorControllerParameterType Type => AnimatorControllerParameterType.Int;
+            public Int(string name = "") : base(name) { }
             public void Set(int value) => Check(Id)?.SetInteger(Id, value);
         }
 
@@ -58,7 +58,8 @@ namespace UnityJigs.Types
                 if (underlyingType != typeof(int)) throw new TypeLoadException("Enum must be an Int32.");
             }
 
-            public Enum(string name = "") : base(AnimatorControllerParameterType.Int, name) { }
+            public override AnimatorControllerParameterType Type => AnimatorControllerParameterType.Int;
+            public Enum(string name = "") : base(name) { }
             public void Set(T value) => Check(Id)?.SetInteger(Id, Cast(value));
             private static unsafe int Cast(T enumValue) => *(int*)&enumValue;
         }
@@ -66,7 +67,8 @@ namespace UnityJigs.Types
         [Serializable]
         public class Float : AnimatorParameter
         {
-            public Float(string name = "") : base(AnimatorControllerParameterType.Float, name) { }
+            public override AnimatorControllerParameterType Type => AnimatorControllerParameterType.Float;
+            public Float(string name = "") : base(name) { }
             public bool IsDamped;
             public float DampTime = 0.1f;
             public void Set(bool value, float? deltaTime = null) => Set(value ? 1 : 0, deltaTime);
@@ -81,15 +83,17 @@ namespace UnityJigs.Types
         [Serializable]
         public class Bool : AnimatorParameter
         {
-            public Bool(string name = "") : base(AnimatorControllerParameterType.Bool, name) { }
+            public override AnimatorControllerParameterType Type => AnimatorControllerParameterType.Bool;
+            public Bool(string name = "") : base( name) { }
             public void Set(bool value) => Check(Id)?.SetBool(Id, value);
         }
 
         [Serializable]
         public class Trigger : AnimatorParameter
         {
+            public override AnimatorControllerParameterType Type => AnimatorControllerParameterType.Trigger;
             private short _nonce;
-            public Trigger(string name = "") : base(AnimatorControllerParameterType.Trigger, name) { }
+            public Trigger(string name = "") : base(name) { }
             public void Set() => Check(Id)?.SetTrigger(Id);
             public void Reset() => Check(Id)?.ResetTrigger(Id);
 
