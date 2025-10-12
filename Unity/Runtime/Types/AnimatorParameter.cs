@@ -25,7 +25,7 @@ namespace UnityJigs.Types
         {
             var animator = Animator;
             if (id == 0) animator = null;
-            else if (animator == null)
+            else if (animator == null || animator.runtimeAnimatorController == null)
             {
 
                 if (!_hasLogged) Debug.LogWarning($"Animator is null: {this}", Animator);

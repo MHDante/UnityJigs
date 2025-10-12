@@ -10,7 +10,11 @@ namespace UnityJigs.Types
     public abstract class CompositeColliderGenerator : MonoBehaviour
     {
         [SerializeField] private bool IsTrigger;
+#if UNITY_6000_0_OR_NEWER
         [SerializeField] private PhysicsMaterial? Material;
+#else
+        [SerializeField] private PhysicMaterial? Material;
+#endif
 
         private string? _error;
 

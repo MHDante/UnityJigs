@@ -11,7 +11,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": false,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "UNITYJIGS_PROBUILDER"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }
