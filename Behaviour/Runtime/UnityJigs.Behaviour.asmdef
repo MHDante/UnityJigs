@@ -13,7 +13,7 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "UnityJigsBehaviour"
+        "UNITYJIGS_BEHAVIOUR"
     ],
     "versionDefines": [],
     "noEngineReferences": false

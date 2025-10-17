@@ -1,0 +1,24 @@
+{
+    "name": "UnityJigs.Fmod.Editor",
+    "rootNamespace": "UnityJigs.Fmod.Editor",
+    "references": [
+        "GUID:0c752da273b17c547ae705acf0f2adf2",
+        "GUID:aab3caaf43456d6449a3e035348ff798",
+        "GUID:dc0abd7de72ac1249bf5045892b24c6a",
+        "GUID:d0457c3aa5572b3478afbf1dbd99a3e7",
+        "GUID:5b6b2ce991c96964ab56dff314ecb2e0"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITYJIGS_FMOD"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
