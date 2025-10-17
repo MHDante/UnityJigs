@@ -19,7 +19,6 @@ namespace UnityJigs.Fmod
 
         private sealed class EntryContext
         {
-            public int Id;
             public float LastTime;
             public readonly HashSet<int> FiredThisLoop = new();
             public readonly List<EventInstance> Instances = new();
@@ -54,7 +53,6 @@ namespace UnityJigs.Fmod
 
             var entry = new EntryContext
             {
-                Id = _NextEntryId++,
                 LastTime = stateInfo.normalizedTime,
             };
             _entries.Add(entry);

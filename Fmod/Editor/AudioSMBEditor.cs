@@ -104,6 +104,7 @@ namespace UnityJigs.Fmod.Editor
 
         private void RefreshContext()
         {
+            if(target is not Fmod.AudioSMB) return;
             _clips.Clear();
             ClipDrawer.Clip = null;
 
@@ -247,10 +248,9 @@ namespace UnityJigs.Fmod.Editor
                 EditorGUILayout.EndHorizontal();
 
                 // --- Handle inclusion changes ---
-                if (newInclude != include)
+                if (evt != null && newInclude != include)
                 {
                     Undo.RecordObject(AudioSMB, "Toggle Clip Inclusion");
-                    evt.ExcludedClips ??= new List<AnimationClip>();
 
                     if (newInclude)
                         evt.ExcludedClips.Remove(clip);

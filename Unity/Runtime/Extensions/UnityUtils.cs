@@ -6,6 +6,7 @@ using System.Linq;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
+using Application = UnityEngine.Application;
 
 namespace UnityJigs.Extensions
 {
@@ -145,7 +146,12 @@ namespace UnityJigs.Extensions
             return found;
         }
 
-
+        public static void DestroySafe(this Object? obj)
+        {
+            if(!obj) return;
+            if(Application.IsPlaying(obj)) Object.Destroy(obj);
+            else Object.DestroyImmediate(obj);
+        }
         public static float NearClipSize(this Camera camera) => NearClipSize(camera.fieldOfView, camera.nearClipPlane);
         public static float NearClipSize(float fov, float nearPlane) => Mathf.Tan(fov * .5f) * nearPlane;
         public static float PixelsAtNearPlane(this Canvas canvas) => ((RectTransform)canvas.transform).rect.height;
