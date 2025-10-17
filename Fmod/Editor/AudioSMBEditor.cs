@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using FMOD.Studio;
 using FMODUnity;
@@ -16,17 +17,17 @@ namespace UnityJigs.Fmod.Editor
     {
         private static bool LoadedBanks = false;
         private static readonly Dictionary<string, float> ParamValues = new();
-        static AudioSMBEditor() => AudioSMB.OnEditorPlay =
-            PlayEditorSound;
+
+        static AudioSMBEditor() => AudioSMB.OnEditorPlay = PlayEditorSound;
 
         private static EventInstance PlayEditorSound(EventReference ev)
         {
-
             if (!LoadedBanks)
             {
                 EditorUtils.LoadPreviewBanks();
                 LoadedBanks = true;
             }
+
             var editorEventRef = EventManager.EventFromPath(ev.Path);
             var eventInstance = EditorUtils.PreviewEvent(editorEventRef, ParamValues);
             return eventInstance;
@@ -45,8 +46,6 @@ namespace UnityJigs.Fmod.Editor
         }
 
         private int? _selectedMarker;
-
-        // Playback tracking
         private bool _wasPlaying;
 
         // --------------------------------------------------------------------
@@ -62,7 +61,7 @@ namespace UnityJigs.Fmod.Editor
         protected override void OnDisable()
         {
             base.OnDisable();
-            ClipDrawer.Dispose();
+            if (ClipDrawer != null!) ClipDrawer.Dispose();
             ClipDrawer = null!;
         }
 
@@ -71,6 +70,12 @@ namespace UnityJigs.Fmod.Editor
         public override void OnInspectorGUI()
         {
             using var _ = new EditorGUI.IndentLevelScope();
+
+            // Hide the Events list from the main inspector
+            var eventsProp = Tree.GetPropertyAtPath(nameof(AudioSMB.Events));
+            if (eventsProp != null)
+                eventsProp.State.Visible = false;
+
             base.OnInspectorGUI();
 
             EditorGUILayout.Space(10);
@@ -85,7 +90,6 @@ namespace UnityJigs.Fmod.Editor
 
             ClipDrawer.ShowIKOnFeetButton = true;
 
-            DrawAnimationSelection();
             DrawPreviewArea();
 
             if (GUILayout.Button("Refresh"))
@@ -135,28 +139,6 @@ namespace UnityJigs.Fmod.Editor
             }
         }
 
-        private void DrawAnimationSelection()
-        {
-            EditorGUILayout.BeginHorizontal();
-            var clipNames = _clips.ConvertAll(c => c.name).ToArray();
-            var selectedClipIndex = _clips.FindIndex(c => c == ClipDrawer.Clip);
-            if (selectedClipIndex < 0) selectedClipIndex = 0;
-            var newIndex = EditorGUILayout.Popup("Preview Clip", selectedClipIndex, clipNames);
-            newIndex = Mathf.Clamp(newIndex, 0, _clips.Count - 1);
-
-            if (_clips.Count == 0)
-                ClipDrawer.Clip = null;
-            else if (newIndex != selectedClipIndex)
-                ClipDrawer.Clip = _clips[newIndex];
-
-            if (selectedClipIndex < _clips.Count)
-            {
-                var clip = _clips[selectedClipIndex];
-                EditorGUILayout.LabelField($"{clip.length:F2}s", GUILayout.Width(60));
-            }
-
-            EditorGUILayout.EndHorizontal();
-        }
 
         private void DrawPreviewArea()
         {
@@ -166,16 +148,33 @@ namespace UnityJigs.Fmod.Editor
             if (!ClipDrawer.HasPreviewGUI)
                 return;
 
+            // Ensure at least one marker and selection
+            if (AudioSMB.Events.Count == 0)
+                AudioSMB.Events.Add(new AudioSMBEvent { NormalizedTime = 0f });
+
+            if (!_markerTrack.SelectedMarkerIndex.HasValue ||
+                _markerTrack.SelectedMarkerIndex.Value < 0 ||
+                _markerTrack.SelectedMarkerIndex.Value >= AudioSMB.Events.Count)
+            {
+                _markerTrack.SelectedMarkerIndex = 0;
+            }
+
+            _selectedMarker = _markerTrack.SelectedMarkerIndex!.Value;
+
             // --- Details panel above timeline ---
-            _selectedMarker = _markerTrack.SelectedMarkerIndex;
-            if (_selectedMarker is { } idx && idx >= 0 && idx < AudioSMB.Events.Count)
+            if (_selectedMarker is int idx and >= 0 && idx < AudioSMB.Events.Count)
             {
                 var path = $"{nameof(AudioSMB.Events)}.${idx}";
                 var prop = Tree.GetPropertyAtPath(path);
                 if (prop != null)
                 {
                     SirenixEditorGUI.BeginBox("Selected Event");
-                    prop.Draw();
+
+                    // Draw only the AudioEvent field
+                    var audioEventProp = prop.Children["AudioEvent"];
+                    audioEventProp?.Draw();
+
+
                     SirenixEditorGUI.EndBox();
                 }
             }
@@ -187,6 +186,82 @@ namespace UnityJigs.Fmod.Editor
             const float previewHeight = 180f;
             var rect = EditorGUILayout.GetControlRect(false, previewHeight);
             ClipDrawer.Draw(rect);
+
+            // Draw the clip inclusion table
+            DrawClipInclusionTable();
+        }
+
+        private void DrawClipInclusionTable()
+        {
+            if (_clips.Count == 0)
+                return;
+
+            SirenixEditorGUI.BeginBox("Clip Inclusion");
+            EditorGUILayout.LabelField("Include Clips:", EditorStyles.miniBoldLabel);
+
+            // Calculate preview highlight color
+            var highlightColor = new Color(0.25f, 0.55f, 1f, 0.15f);
+
+            AudioSMBEvent? evt = null;
+
+            // --- Details panel above timeline ---
+            if (_selectedMarker is int idx and >= 0 && idx < AudioSMB.Events.Count)
+            {
+                evt = AudioSMB.Events[idx];
+            }
+
+            foreach (var clip in _clips)
+            {
+                bool excluded = evt?.ExcludedClips != null && evt.ExcludedClips.Contains(clip);
+                bool include = !excluded;
+                bool isPreview = (ClipDrawer.Clip == clip);
+
+                // Background tint for current preview clip
+                var rect = EditorGUILayout.BeginHorizontal();
+                if (isPreview)
+                {
+                    var c = GUI.color;
+                    EditorGUI.DrawRect(rect, highlightColor);
+                    GUI.color = c;
+                }
+
+                // --- Left radio button for preview selection ---
+                bool selected = (ClipDrawer.Clip == clip);
+                bool newSelected = GUILayout.Toggle(selected, GUIContent.none, EditorStyles.radioButton,
+                    GUILayout.Width(18));
+                if (newSelected && !selected)
+                {
+                    ClipDrawer.Clip = clip;
+                    GUI.changed = true;
+                }
+
+                // --- Clip name (left aligned) ---
+                EditorGUILayout.LabelField(clip.name, GUILayout.ExpandWidth(true));
+
+                // --- Clip length (tight to checkbox) ---
+                EditorGUILayout.LabelField($"{clip.length:F2}s", GUILayout.Width(50));
+
+                // --- Right-hand inclusion checkbox ---
+                bool newInclude = GUILayout.Toggle(include, GUIContent.none, GUILayout.Width(18));
+
+                EditorGUILayout.EndHorizontal();
+
+                // --- Handle inclusion changes ---
+                if (newInclude != include)
+                {
+                    Undo.RecordObject(AudioSMB, "Toggle Clip Inclusion");
+                    evt.ExcludedClips ??= new List<AnimationClip>();
+
+                    if (newInclude)
+                        evt.ExcludedClips.Remove(clip);
+                    else if (!evt.ExcludedClips.Contains(clip))
+                        evt.ExcludedClips.Add(clip);
+
+                    EditorUtility.SetDirty(AudioSMB);
+                }
+            }
+
+            SirenixEditorGUI.EndBox();
         }
 
         // ---------------------------------------------------------------
@@ -203,19 +278,16 @@ namespace UnityJigs.Fmod.Editor
 
             if (!_wasPlaying && isPlaying)
             {
-                // Enter preview
                 var stateInfo = CreateFakeStateInfo(currentTime);
                 AudioSMB.OnStateEnter(null, stateInfo, 0);
             }
             else if (_wasPlaying && isPlaying)
             {
-                // Update preview
                 var stateInfo = CreateFakeStateInfo(currentTime);
                 AudioSMB.OnStateUpdate(null, stateInfo, 0);
             }
             else if (_wasPlaying && !isPlaying)
             {
-                // Exit preview
                 var stateInfo = CreateFakeStateInfo(currentTime);
                 AudioSMB.OnStateExit(null, stateInfo, 0);
             }
@@ -226,8 +298,6 @@ namespace UnityJigs.Fmod.Editor
         private static AnimatorStateInfo CreateFakeStateInfo(float normalizedTime, float length = 1f)
         {
             var info = new AnimatorStateInfo();
-
-            // Use reflection to set internal fields
             var type = typeof(AnimatorStateInfo);
             BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
 
@@ -240,7 +310,6 @@ namespace UnityJigs.Fmod.Editor
             type.GetField("m_SpeedMultiplier", flags)?.SetValueDirect(__makeref(info), 1f);
             type.GetField("m_Tag", flags)?.SetValueDirect(__makeref(info), 0);
             type.GetField("m_Loop", flags)?.SetValueDirect(__makeref(info), 1);
-
             return info;
         }
 
@@ -249,7 +318,6 @@ namespace UnityJigs.Fmod.Editor
         // ---------------------------------------------------------------
 
         public int GetMarkerCount() => AudioSMB.Events.Count;
-
         public float GetMarkerTime(int index) => AudioSMB.Events[index].NormalizedTime;
 
         public void UpdateMarkerTime(int index, float newNormalizedTime)
@@ -278,7 +346,7 @@ namespace UnityJigs.Fmod.Editor
         public string GetMarkerLabel(int index)
         {
             var evt = AudioSMB.Events[index];
-            return evt.AudioEvent.IsNull ? $"Evt {index}" : evt.AudioEvent.Path;
+            return evt.AudioEvent.IsNull ? $"Missing {index}" : evt.AudioEvent.Path.Split("/").Last();
         }
 
         public float GetSuggestedNewMarkerTime() => Mathf.Repeat(ClipDrawer.NormalizedTime, 1f);

@@ -207,8 +207,7 @@ namespace UnityJigs.Editor
             // If user scrolls outside the 3D camera viewport, skip preview input this frame.
             if (evt.type == EventType.ScrollWheel && !insidePreview)
                 return;
-
-            _clipEditor.OnInteractivePreviewGUI(rect, GUIStyle.none);
+            if(HasPreviewGUI) _clipEditor.OnInteractivePreviewGUI(rect, GUIStyle.none);
         }
 
         /// <summary>

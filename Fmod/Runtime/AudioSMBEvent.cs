@@ -19,6 +19,6 @@ namespace UnityJigs.Fmod
         public EventReference AudioEvent;
 
         [Tooltip("If not empty, restricts this event to specific AnimationClips in a blend tree.")]
-        public List<AnimationClip> ClipFilters = new();
+        public List<AnimationClip> ExcludedClips = new();
     }
 }

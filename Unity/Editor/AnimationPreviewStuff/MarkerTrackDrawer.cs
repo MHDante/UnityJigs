@@ -16,13 +16,14 @@ namespace UnityJigs.Editor
         private const float ButtonSize = 20f;
         private const float MarkerHitSize = 12f;
 
-        private int? _selectedIndex;
+        public int? SelectedMarkerIndex;
+        public bool AllowDeselect;
+
         private int? _draggedIndex;
         private bool _isDragging;
         private Vector2 _dragStartPos;
         private float _dragStartTime;
 
-        public int? SelectedMarkerIndex => _selectedIndex;
         public int? DraggedMarkerIndex => _draggedIndex;
 
         public MarkerTrackDrawer(IMarkerTrackSource source) => _source = source;
@@ -73,7 +74,7 @@ namespace UnityJigs.Editor
                 float t = _source.GetMarkerTime(i);
                 float x = Mathf.Lerp(trackRect.xMin, trackRect.xMax, t);
                 var center = new Vector2(x, trackRect.center.y);
-                var color = (i == _selectedIndex ? Color.yellow : Color.cyan);
+                var color = (i == SelectedMarkerIndex ? Color.yellow : Color.cyan);
 
                 Handles.color = color;
                 Handles.DrawSolidDisc(center, Vector3.forward, MarkerSize * 0.5f);
@@ -101,7 +102,7 @@ namespace UnityJigs.Editor
                     if (Mathf.Abs(mousePos.x - x) <= MarkerHitSize)
                     {
                         GUI.FocusControl(null);
-                        _selectedIndex = i;
+                        SelectedMarkerIndex = i;
                         _draggedIndex = i;
                         _isDragging = true;
                         _dragStartPos = mousePos;
@@ -111,11 +112,14 @@ namespace UnityJigs.Editor
                     }
                 }
 
-                // Clicked empty space: deselect
-                _selectedIndex = null;
-                _draggedIndex = null;
-                GUI.changed = true;
-                e.Use();
+                if (AllowDeselect)
+                {
+                    // Clicked empty space: deselect
+                    SelectedMarkerIndex = null;
+                    _draggedIndex = null;
+                    GUI.changed = true;
+                    e.Use();
+                }
             }
 
             if (_isDragging && _draggedIndex.HasValue)
@@ -149,15 +153,15 @@ namespace UnityJigs.Editor
             {
                 float time = Mathf.Clamp01(_source.GetSuggestedNewMarkerTime());
                 _source.AddMarker(time);
-                _selectedIndex = _source.GetMarkerCount() - 1;
+                SelectedMarkerIndex = _source.GetMarkerCount() - 1;
                 GUI.changed = true;
             }
 
-            GUI.enabled = _selectedIndex.HasValue;
-            if (GUI.Button(removeRect, "-") && _selectedIndex.HasValue)
+            GUI.enabled = SelectedMarkerIndex.HasValue;
+            if (GUI.Button(removeRect, "-") && SelectedMarkerIndex.HasValue)
             {
-                _source.RemoveMarker(_selectedIndex.Value);
-                _selectedIndex = null;
+                _source.RemoveMarker(SelectedMarkerIndex.Value);
+                SelectedMarkerIndex = null;
                 GUI.changed = true;
             }
             GUI.enabled = true;
