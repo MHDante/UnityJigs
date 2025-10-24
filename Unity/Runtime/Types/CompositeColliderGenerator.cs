@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Pool;
 using Sirenix.OdinInspector;
@@ -15,14 +16,10 @@ namespace UnityJigs.Types
 #else
         [SerializeField] private PhysicMaterial? Material;
 #endif
-
         private string? _error;
-
         private int _lastHash;
         private int _lastCount;
-        public List<MeshCollider> Colliders = new();
-        private readonly Queue<Mesh> _meshPool = new();
-
+        private List<MeshCollider> Colliders { get; } = new();
         protected abstract (List<Vector2> polygon, float height) GetSource();
 
         private void Update()
@@ -39,12 +36,10 @@ namespace UnityJigs.Types
 
         private void OnValidate() => ApplyColliderSettings();
 
-        private void OnEnable() => SetCollidersActive(true);
-        private void OnDisable() => SetCollidersActive(false);
 
-
-
-        [ShowInInspector, InfoBox("$" + nameof(_error), InfoMessageType.Error, VisibleIf = "@!string.IsNullOrEmpty(" + nameof(_error) + ")")]
+        [ShowInInspector,
+         InfoBox("$" + nameof(_error), InfoMessageType.Error,
+             VisibleIf = "@!string.IsNullOrEmpty(" + nameof(_error) + ")")]
         private void TryRebuild()
         {
             try
@@ -57,28 +52,18 @@ namespace UnityJigs.Types
                 if (_error != ex.Message)
                 {
                     _error = ex.Message;
-                    Debug.LogError($"[{name}] Collider rebuild failed: {_error}", this);
+                    Debug.LogException(ex, this);
                 }
             }
         }
 
         private void Rebuild()
         {
-            var isPlaying = Application.IsPlaying(this);
             Colliders.RemoveAll(static it => !it);
-
-            foreach (var mc in Colliders)
-            {
-                if (mc.sharedMesh != null && isPlaying)
-                    _meshPool.Enqueue(mc.sharedMesh);
-
-                if (isPlaying)
-                    Destroy(mc.gameObject);
-                else
-                    DestroyImmediate(mc.gameObject);
-            }
-
             Colliders.Clear();
+            var childColliders = transform.Cast<Transform>().Select(it => it.GetComponent<MeshCollider>())
+                .WhereNotNull();
+            Colliders.AddRange(childColliders);
 
             var (polygon, height) = GetSource();
             if (polygon.Count < 3) return;
@@ -86,13 +71,26 @@ namespace UnityJigs.Types
             using var _1 = ListPool<List<Vector2>>.Get(out var convexPolys);
             ConvexDecomposition2D.Decompose(polygon, convexPolys);
 
-            foreach (var poly in convexPolys)
-                CreateConvexPrism(poly, height);
+            for (var i = convexPolys.Count; i < Colliders.Count; i++)
+            {
+                var excessCollider = Colliders[i];
+                excessCollider.gameObject.DestroySafe();
+                Colliders.RemoveAt(i);
+                i--;
+            }
+
+            for (int i = 0; i < convexPolys.Count; i++)
+            {
+                var mc = Colliders.GetSafe(i) ?? Colliders.AddAndGet(MakeCollider());
+                if(mc.sharedMesh == null) mc.sharedMesh = MakeMesh();
+                var poly = convexPolys[i];
+                CreateConvexPrism(poly, height, mc.sharedMesh);
+            }
 
             ApplyColliderSettings();
         }
 
-        protected virtual void CreateConvexPrism(List<Vector2> poly2D, float height)
+        protected virtual void CreateConvexPrism(List<Vector2> poly2D, float height, Mesh mesh)
         {
             var n = poly2D.Count;
             if (n < 3) return;
@@ -132,34 +130,28 @@ namespace UnityJigs.Types
                 tris.Add(n + i);
             }
 
-            var mesh = GetMesh();
             mesh.Clear();
             mesh.vertices = verts;
             mesh.triangles = tris.ToArray();
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
-
-            var child = new GameObject($"ConvexPiece_{Colliders.Count}");
-            child.transform.SetParent(transform, false);
-            child.AddComponent<MeshFilter>().sharedMesh = mesh;
-            child.AddComponent<MeshRenderer>().enabled = false;
-
-            var mc = child.AddComponent<MeshCollider>();
-            mc.sharedMesh = mesh;
-            mc.convex = true;
-            Colliders.Add(mc);
         }
 
-        private Mesh GetMesh()
+        private MeshCollider MakeCollider()
         {
-            if (Application.IsPlaying(this))
-            {
-                var mesh = _meshPool.Count > 0 ? _meshPool.Dequeue() : new Mesh();
-                mesh.MarkDynamic();
-                return mesh;
-            }
+            var child = new GameObject($"ConvexPiece_{Colliders.Count}");
+            child.transform.SetParent(transform, false);
+            var mc = child.AddComponent<MeshCollider>();
+            mc.convex = true;
+            mc.sharedMesh = MakeMesh();
+            return mc;
+        }
 
-            return new Mesh(); // fresh mesh in edit mode
+        private Mesh MakeMesh()
+        {
+            var mesh = new Mesh(); // fresh mesh in edit mode
+            if (Application.IsPlaying(this)) mesh.MarkDynamic();
+            return mesh;
         }
 
         private void ApplyColliderSettings()
@@ -195,6 +187,39 @@ namespace UnityJigs.Types
 
                 return hash;
             }
+        }
+
+#if UNITY_EDITOR
+        [UnityEditor.MenuItem("Utils/CompositeCollider/Rebuild All")]
+#endif
+        public static void RebuildAll()
+        {
+            var generators =
+                FindObjectsByType<CompositeColliderGenerator>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Debug.Log(generators.Length + " CompositeColliderGenerators found");
+            foreach (var generator in generators) generator.Rebuild();
+        }
+
+
+#if UNITY_EDITOR
+        [UnityEditor.MenuItem("Utils/CompositeCollider/Destroy All Children")]
+#endif
+        public static void DestroyAllChildren()
+        {
+            var generators =
+                FindObjectsByType<CompositeColliderGenerator>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Debug.Log(generators.Length + " CompositeColliderGenerators found");
+            foreach (var generator in generators)
+            {
+                generator.DestroyChildren();
+            }
+        }
+
+        [Button]
+        private void DestroyChildren()
+        {
+            var children = transform.Children().ToList();
+            foreach (var child in children) child.gameObject.DestroySafe();
         }
     }
 }

@@ -233,5 +233,38 @@ namespace UnityJigs.Extensions
             Application.Quit();
 #endif
         }
+
+        /// <summary>
+        /// Draws a wireframe quad (4 edges) defined by its four corners.
+        /// </summary>
+        public static void DrawWireQuadGizmo(
+            in Vector3 c0, in Vector3 c1, in Vector3 c2, in Vector3 c3)
+        {
+            Gizmos.DrawLine(c0, c1);
+            Gizmos.DrawLine(c1, c2);
+            Gizmos.DrawLine(c2, c3);
+            Gizmos.DrawLine(c3, c0);
+        }
+
+        /// <summary>
+        /// Draws a full wireframe volume (12 edges) between a near and far quad.
+        /// </summary>
+        public static void DrawWireVolumeGizmo(
+            in Vector3 n0, in Vector3 n1, in Vector3 n2, in Vector3 n3,
+            in Vector3 f0, in Vector3 f1, in Vector3 f2, in Vector3 f3)
+        {
+            // Near + far quads
+            DrawWireQuadGizmo(in n0, in n1, in n2, in n3);
+            DrawWireQuadGizmo(in f0, in f1, in f2, in f3);
+
+            // Connect edges
+            Gizmos.DrawLine(n0, f0);
+            Gizmos.DrawLine(n1, f1);
+            Gizmos.DrawLine(n2, f2);
+            Gizmos.DrawLine(n3, f3);
+        }
+
+        public static TransformEnumerable Children(this Transform parent)=> new(parent);
+        public static TransformEnumerable Children(this GameObject parent)=> new(parent.transform);
     }
 }

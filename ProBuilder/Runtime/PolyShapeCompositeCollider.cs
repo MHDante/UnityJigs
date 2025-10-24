@@ -13,8 +13,7 @@ namespace UnityJigs.ProBuilder
 
         protected override (List<Vector2>, float) GetSource()
         {
-            if (SourceShape == null)
-                SourceShape = GetComponentInParent<PolyShape>();
+            if (SourceShape == null) SourceShape = GetComponentInParent<PolyShape>();
             if (SourceShape == null || SourceShape.controlPoints == null || SourceShape.controlPoints.Count < 3)
                 return (new List<Vector2>(), 0);
 
