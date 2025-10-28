@@ -75,7 +75,8 @@ namespace UnityJigs.Editor.CustomDrawers
                     it.Info.TypeOfValue == typeof(Animator);
 
                 var autoAnimProp = prop.Parent.Children.FirstOrDefault(predicate) ??
-                                   prop.Parent.Parent?.Children.FirstOrDefault(predicate);
+                                   prop.Parent.Parent?.Children.FirstOrDefault(predicate) ??
+                                   prop.Parent.Parent?.Parent?.Children.FirstOrDefault(predicate);
 
                 if (autoAnimProp != null) foundAnimator = true;
                 animator = autoAnimProp?.ValueEntry.WeakSmartValue as Animator;
@@ -83,24 +84,43 @@ namespace UnityJigs.Editor.CustomDrawers
 
             if (!foundAnimator)
             {
-                var obj = prop.Parent.ValueEntry.WeakSmartValue;
-                var objProps = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.NonPublic |
-                                                           BindingFlags.Instance | BindingFlags.Static);
-                var animProp = objProps.FirstOrDefault(it =>
-                    it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
-                    it.PropertyType == typeof(Animator) && it.CanRead);
+                PropertyInfo? animProp = null;
+                object? obj = null;
+                var p = prop;
+                for (int i = 0; i < 3; i++)
+                {
+                    p = p.Parent;
+                    if (p == null) break;
+                    obj = p.ValueEntry.WeakSmartValue;
+                    var objProps = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.NonPublic |
+                                                               BindingFlags.Instance | BindingFlags.Static);
+                    animProp = objProps.FirstOrDefault(it =>
+                        it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
+                        it.PropertyType == typeof(Animator) && it.CanRead);
+                }
+
                 if (animProp != null) foundAnimator = true;
                 animator = (Animator?)animProp?.GetValue(obj);
             }
 
             if (!foundAnimator)
             {
-                var obj = prop.Parent.ValueEntry.WeakSmartValue;
-                var objProps = obj.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic |
-                                                       BindingFlags.Instance | BindingFlags.Static);
-                var animProp = objProps.FirstOrDefault(it =>
-                    it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
-                    it.FieldType == typeof(Animator));
+                object? obj = null;
+                FieldInfo? animProp = null;
+
+                var p = prop;
+                for (int i = 0; i < 3; i++)
+                {
+                    p = p.Parent;
+                    if (p == null) break;
+                    obj = p.ValueEntry.WeakSmartValue;
+                    var objProps = obj.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+                                                           BindingFlags.Instance | BindingFlags.Static);
+                    animProp = objProps.FirstOrDefault(it =>
+                        it.Name.Equals("Animator", StringComparison.InvariantCultureIgnoreCase) &&
+                        it.FieldType == typeof(Animator));
+                }
+
                 if (animProp != null) foundAnimator = true;
                 animator = (Animator?)animProp?.GetValue(obj);
             }

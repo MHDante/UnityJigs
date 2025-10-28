@@ -95,6 +95,7 @@ namespace UnityJigs.Types
             private short _nonce;
             public Trigger(string name = "") : base(name) { }
             public void Set() => Check(Id)?.SetTrigger(Id);
+            public void SetIf(bool value) => Check(value?Id : 0)?.SetTrigger(Id);
             public void Reset() => Check(Id)?.ResetTrigger(Id);
 
             public bool Sync(Signal? s)
