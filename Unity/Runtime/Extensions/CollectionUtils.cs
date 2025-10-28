@@ -224,6 +224,12 @@ namespace UnityJigs.Extensions
                 list.RemoveAt(list.Count - 1);
         }
 
+        public static void GrowAndSetAt<T>(this IList<T?> list, int index, T? value, T? defaultValue = default)
+        {
+            while (list.Count <= index) list.Add(defaultValue);
+            list[index] = value;
+        }
+
 
         public static SerializedSet<T> ToSerializedSet<T>(this IEnumerable<T> list) => new(list);
 

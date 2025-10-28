@@ -22,7 +22,7 @@ namespace UnityJigs.Editor.CustomDrawers
             _animatorResolver = new(Property, nameof(AnimatorParameter.Animator));
         }
 
-        protected override void DrawPropertyLayout(GUIContent label)
+        protected override void DrawPropertyLayout(GUIContent? label)
         {
 
             var animatorController = _animatorResolver.UpdateAnimatorProp(out var animator);
@@ -50,10 +50,12 @@ namespace UnityJigs.Editor.CustomDrawers
             if (currentIndex < 0)
                 SirenixEditorGUI.ErrorMessageBox($"Animator Parameter Does not Exist: ({currentName})!");
 
-            label.image = EditorIcons.Timer.Active;
-
-            if (label.text.StartsWith("Anim_")) label.text = " " + label.text[5..];
-            else if (label.text.StartsWith("Anim")) label.text = " " + label.text[4..];
+            if (label != null)
+            {
+                label.image = EditorIcons.Timer.Active;
+                if (label.text.StartsWith("Anim_")) label.text = " " + label.text[5..];
+                else if (label.text.StartsWith("Anim")) label.text = " " + label.text[4..];
+            }
 
 
             var isDampedProp = Property.Children.Get(nameof(AnimatorParameter.Float.IsDamped));

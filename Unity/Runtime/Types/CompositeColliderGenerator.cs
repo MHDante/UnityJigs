@@ -165,12 +165,6 @@ namespace UnityJigs.Types
             }
         }
 
-        private void SetCollidersActive(bool active)
-        {
-            foreach (var mc in Colliders)
-                if (mc && mc.gameObject)
-                    mc.gameObject.SetActive(active);
-        }
 
         private int ComputeHash()
         {
