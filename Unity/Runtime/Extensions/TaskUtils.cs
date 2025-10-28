@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using UnityEngine;
 
 // ReSharper disable AccessToModifiedClosure
 
@@ -11,7 +12,7 @@ namespace UnityJigs.Extensions
             TSource source,
             Action<TSource, Action<TResult>> subscribe,
             Action<TSource, Action<TResult>> unsubscribe
-            )
+        )
         {
             var tcs = new TaskCompletionSource<TResult>();
             var subFn = new Action<TResult>(t => tcs.SetResult(t));
@@ -45,5 +46,16 @@ namespace UnityJigs.Extensions
             return tcs.Task;
         }
 
+
+        public static void LogErrors(this Task task)
+        {
+            task.ContinueWith(static it =>
+            {
+                if (it.Status != TaskStatus.Faulted) return;
+                Debug.LogError(it.Exception);
+                if (it.Exception?.InnerException != null)
+                    Debug.LogError(it.Exception.InnerException);
+            });
+        }
     }
 }
