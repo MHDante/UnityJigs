@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using JetBrains.Annotations;
 using UnityEngine;
 
 // ReSharper disable AccessToModifiedClosure
@@ -52,10 +54,28 @@ namespace UnityJigs.Extensions
             task.ContinueWith(static it =>
             {
                 if (it.Status != TaskStatus.Faulted) return;
-                Debug.LogError(it.Exception);
+                Debug.LogException(it.Exception);
                 if (it.Exception?.InnerException != null)
-                    Debug.LogError(it.Exception.InnerException);
+                    Debug.LogException(it.Exception.InnerException);
             });
+        }
+
+        public static ValueTask WaitUntil<T>(T context, [RequireStaticDelegate] Func<T, bool> condition) =>
+            WaitUntil(context, CancellationToken.None, condition);
+
+        public static async ValueTask WaitUntil<T>(T context, CancellationToken t,
+            [RequireStaticDelegate] Func<T, bool> condition)
+        {
+            while (!condition(context)) await Awaitable.NextFrameAsync(t);
+        }
+
+        public static ValueTask FixedWaitUntil<T>(T context, [RequireStaticDelegate] Func<T, bool> condition) =>
+            FixedWaitUntil(context, CancellationToken.None, condition);
+
+        public static async ValueTask FixedWaitUntil<T>(T context, CancellationToken t,
+            [RequireStaticDelegate]Func<T, bool> condition)
+        {
+            while (!condition(context)) await Awaitable.FixedUpdateAsync(t);
         }
     }
 }
