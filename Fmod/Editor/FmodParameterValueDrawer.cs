@@ -14,21 +14,21 @@ namespace UnityJigs.Fmod.Editor
     /// Draws a float using FMOD parameter UI (slider / enum popup), resolving a nearby FmodParameterRef and EventReference.
     /// The field keeps its own label; meta hint is NOT shown here.
     /// </summary>
-    public sealed class FmodParameterValueDrawer : OdinAttributeDrawer<FmodParameterValuePickerAttribute, float>
+    public sealed class FmodParameterValueDrawer : OdinAttributeDrawer<FmodParamValueAttribute, float>
     {
-        private ValueResolver<FmodParameterRef>? _paramRefResolver;
+        private ValueResolver<FmodParam>? _paramRefResolver;
         private ValueResolver<EventReference>? _eventRefResolver;
 
         protected override void Initialize()
         {
-            var attr = Property.GetAttribute<FmodParameterValuePickerAttribute>();
+            var attr = Property.GetAttribute<FmodParamValueAttribute>();
 
             // Parameter ref resolver (required)
-            var paramPath = attr?.ParamRefMember ?? "Parameter";
-            _paramRefResolver = ValueResolver.Get<FmodParameterRef>(Property, paramPath);
+            var paramPath = attr?.ParamRefResolver ?? "Parameter";
+            _paramRefResolver = ValueResolver.Get<FmodParam>(Property, paramPath);
             var prop = _paramRefResolver.GetTargetProperty();
 
-            var attr2 = prop.GetAttribute<FmodParameterPickerAttribute>();
+            var attr2 = prop.GetAttribute<FmodEventAttribute>();
             // Event reference resolver (optional; defaults to "EventReference")
             var evtPath = attr2?.EventRefMember ?? "EventReference";
             _eventRefResolver = ValueResolver.Get<EventReference>(Property, evtPath);

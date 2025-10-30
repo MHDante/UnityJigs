@@ -9,13 +9,13 @@ using UnityEngine;
 
 namespace UnityJigs.Fmod.Editor
 {
-    public sealed class FmodParameterRefDrawer : OdinValueDrawer<FmodParameterRef>
+    public sealed class FmodParameterRefDrawer : OdinValueDrawer<FmodParam>
     {
         private ValueResolver<EventReference>? _eventRefResolver;
 
         protected override void Initialize()
         {
-            var attr = Property.GetAttribute<FmodParameterPickerAttribute>();
+            var attr = Property.GetAttribute<FmodEventAttribute>();
             var memberPath = attr?.EventRefMember ?? "EventReference";
             _eventRefResolver = ValueResolver.Get<EventReference>(Property, memberPath);
         }

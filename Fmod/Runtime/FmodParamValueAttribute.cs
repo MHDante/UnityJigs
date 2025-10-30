@@ -8,14 +8,11 @@ namespace UnityJigs.Fmod
     /// Resolves a nearby FmodParameterRef and (optionally) an EventReference on the same object.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public sealed class FmodParameterValuePickerAttribute : Attribute
+    public sealed class FmodParamValueAttribute : Attribute
     {
-        public string ParamRefMember { get; }
+        public string ParamRefResolver { get; }
 
-        /// <param name="paramRefMember">Member path to a FmodParameterRef on the same object.</param>
-        public FmodParameterValuePickerAttribute(string paramRefMember)
-        {
-            ParamRefMember = paramRefMember;
-        }
+        /// <param name="paramRefResolver">Member path to a FmodParameterRef on the same object.</param>
+        public FmodParamValueAttribute(string paramRefResolver) => ParamRefResolver = paramRefResolver;
     }
 }

@@ -8,7 +8,7 @@ namespace UnityJigs.Fmod
     /// Holds a non-serialized EventInstance for live preview and exposes Set().
     /// </summary>
     [Serializable]
-    public struct FmodParameterRef
+    public struct FmodParam
     {
         // Parameter selection (by name) and authoring value:
         [SerializeField] public string Name; // parameter name chosen in the dropdown
@@ -43,18 +43,5 @@ namespace UnityJigs.Fmod
             EventInstance.getParameterByName(Name, out liveValue);
             return true;
         }
-    }
-
-    /// <summary>
-    /// Attribute to tell the drawer how to find the EventReference on the same component.
-    /// Pass the field or property name (default: "EventReference").
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public sealed class FmodParameterPickerAttribute : Attribute
-    {
-        public string EventRefMember { get; }
-
-        public FmodParameterPickerAttribute(string eventRefMember = "EventReference") =>
-            EventRefMember = eventRefMember;
     }
 }
