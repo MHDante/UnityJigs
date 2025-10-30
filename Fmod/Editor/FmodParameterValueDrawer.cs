@@ -62,7 +62,6 @@ namespace UnityJigs.Fmod.Editor
 
             // Prefer live value if an instance is bound.
             var displayValue = value;
-            if (paramRef.TryReadLive(out var live)) displayValue = live;
 
             // Single-row layout: draw the label, then draw ONLY the control (no meta) in the field rect.
             var r = EditorGUILayout.GetControlRect();
