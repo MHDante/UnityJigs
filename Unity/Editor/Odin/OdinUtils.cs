@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using Sirenix.OdinInspector.Editor;
+using Sirenix.OdinInspector.Editor.ValueResolvers;
 using UnityEditor;
 using UnityEngine;
 
@@ -116,6 +117,12 @@ namespace UnityJigs.Editor.Odin
             }
 
             return newExtents;
+        }
+
+        public static InspectorProperty GetTargetProperty(this ValueResolver resolver)
+        {
+            ref var ctx = ref resolver.Context;
+            return ctx.ContextProperty.Children.Get(ctx.ResolvedString);
         }
     }
 }

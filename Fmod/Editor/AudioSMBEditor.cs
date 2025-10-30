@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using FMOD.Studio;
 using FMODUnity;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.Utilities.Editor;
@@ -15,23 +14,8 @@ namespace UnityJigs.Fmod.Editor
     [CustomEditor(typeof(AudioSMB), true)]
     public class AudioSMBEditor : OdinEditor, IMarkerTrackSource
     {
-        private static bool LoadedBanks = false;
-        private static readonly Dictionary<string, float> ParamValues = new();
 
-        static AudioSMBEditor() => AudioSMB.OnEditorPlay = PlayEditorSound;
-
-        private static EventInstance PlayEditorSound(EventReference ev)
-        {
-            if (!LoadedBanks)
-            {
-                EditorUtils.LoadPreviewBanks();
-                LoadedBanks = true;
-            }
-
-            var editorEventRef = EventManager.EventFromPath(ev.Path);
-            var eventInstance = EditorUtils.PreviewEvent(editorEventRef, ParamValues);
-            return eventInstance;
-        }
+        static AudioSMBEditor() => AudioSMB.OnEditorPlay = FmodEditorUtils.PlayEditorSound;
 
         public AudioSMB AudioSMB => (AudioSMB)target;
         private readonly List<AnimationClip> _clips = new();
