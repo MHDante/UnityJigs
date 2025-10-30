@@ -46,11 +46,21 @@ namespace UnityJigs.Extensions
         public static Vector3 X_Z(this Vector2 v, float y) => new(v.x, y, v.y);
         public static Vector3 X0Z(this Vector2 v) => new(v.x, 0, v.y);
 
+        public static float Min(this Vector3 v) => Mathf.Min(Mathf.Min(v.x, v.y), v.z);
+        public static float Min(this Vector2 v) => Mathf.Min(v.x, v.y);
+        public static float Min(this Vector4 v) => Mathf.Min(Mathf.Min(v.x, v.y), Mathf.Min(v.z, v.w));
+
+        public static float Max(this Vector2 v) => Mathf.Min(v.x, v.y);
+        public static float Max(this Vector3 v) => Mathf.Max(Mathf.Max(v.x, v.y), v.z);
+        public static float Max(this Vector4 v) => Mathf.Max(Mathf.Max(v.x, v.y), Mathf.Max(v.z, v.w));
+
+
         public static Vector3 Divide(this Vector3 a, Vector3 b) => new(a.x / b.x, a.y / b.y, a.z / b.z);
         public static Vector3 Multiply(this Vector3 a, Vector3 b) => new(a.x * b.x, a.y * b.y, a.z * b.z);
         public static Color WithAlpha(this Color c, float a) => new(c.r, c.g, c.b, a);
 
-        public static bool MinMaxContains(this Vector2 minMax, float v, bool minInclusive = true, bool maxInclusive = true)
+        public static bool MinMaxContains(this Vector2 minMax, float v, bool minInclusive = true,
+            bool maxInclusive = true)
         {
             if (minInclusive)
             {
@@ -67,7 +77,6 @@ namespace UnityJigs.Extensions
             }
             else
             {
-
                 if (!(v < minMax.y)) return false;
             }
 
@@ -76,6 +85,7 @@ namespace UnityJigs.Extensions
 
         public static float Clamp01(this float t) => Mathf.Clamp01(t);
         public static float Abs(this float t) => Mathf.Abs(t);
+
         public static T GetSaveData<T>(ref T? singletonField, string fileName) where T : class, new()
         {
             if (singletonField != null) return singletonField;
@@ -148,10 +158,11 @@ namespace UnityJigs.Extensions
 
         public static void DestroySafe(this Object? obj)
         {
-            if(!obj) return;
-            if(Application.IsPlaying(obj)) Object.Destroy(obj);
+            if (!obj) return;
+            if (Application.IsPlaying(obj)) Object.Destroy(obj);
             else Object.DestroyImmediate(obj);
         }
+
         public static float NearClipSize(this Camera camera) => NearClipSize(camera.fieldOfView, camera.nearClipPlane);
         public static float NearClipSize(float fov, float nearPlane) => Mathf.Tan(fov * .5f) * nearPlane;
         public static float PixelsAtNearPlane(this Canvas canvas) => ((RectTransform)canvas.transform).rect.height;
@@ -264,7 +275,7 @@ namespace UnityJigs.Extensions
             Gizmos.DrawLine(n3, f3);
         }
 
-        public static TransformEnumerable Children(this Transform parent)=> new(parent);
-        public static TransformEnumerable Children(this GameObject parent)=> new(parent.transform);
+        public static TransformEnumerable Children(this Transform parent) => new(parent);
+        public static TransformEnumerable Children(this GameObject parent) => new(parent.transform);
     }
 }
