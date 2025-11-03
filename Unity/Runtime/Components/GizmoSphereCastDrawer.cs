@@ -5,12 +5,12 @@ namespace NorthShore.Player
 {
     public class GizmoDrawer : MonoBehaviour
     {
-        private readonly List<CapsuleData> CapsuleDataList = new();
-        private readonly List<SphereData> SphereDataList = new();
-        private readonly List<BoxData> BoxDataList = new();
+        private readonly List<CapsuleData> _capsuleDataList = new();
+        private readonly List<SphereData> _sphereDataList = new();
+        private readonly List<BoxData> _boxDataList = new();
 
         private static GizmoDrawer? _Instance;
-        private static GizmoDrawer Instance => _Instance ?? new GameObject().AddComponent<GizmoDrawer>();
+        private static GizmoDrawer Instance => _Instance ? _Instance : new GameObject().AddComponent<GizmoDrawer>();
 
         private void Awake()
         {
@@ -21,7 +21,7 @@ namespace NorthShore.Player
 
         public static void DrawSphereCast(Vector3 origin, float radius, Vector3 direction, float distance,
             Color? color = null) =>
-            Instance.CapsuleDataList.Add(new CapsuleData
+            Instance._capsuleDataList.Add(new CapsuleData
             {
                 Origin = origin,
                 Direction = direction,
@@ -35,7 +35,7 @@ namespace NorthShore.Player
             DrawSphereCast(point1, radius, (point2 - point1).normalized, Vector3.Distance(point2, point1), color);
 
         public static void DrawBox(Vector3 centre, Vector3 size, Quaternion orientation, Color? color = null) =>
-            Instance.BoxDataList.Add(new BoxData
+            Instance._boxDataList.Add(new BoxData
             {
                 Centre = centre,
                 Size = size,
@@ -44,7 +44,7 @@ namespace NorthShore.Player
             });
 
         public static void DrawSphere(Vector3 centre, float radius, Color? color = null) =>
-            Instance.SphereDataList.Add(new()
+            Instance._sphereDataList.Add(new()
             {
                 Origin = centre,
                 Radius = radius,
@@ -53,15 +53,15 @@ namespace NorthShore.Player
 
         private void OnDrawGizmos()
         {
-            foreach (var data in CapsuleDataList)
+            foreach (var data in _capsuleDataList)
             {
                 var oldColor = Gizmos.color;
                 DrawCapsule(data.Origin, data.Direction, data.Radius, data.Distance, data.Color);
                 Gizmos.color = oldColor;
             }
-            CapsuleDataList.Clear();
+            _capsuleDataList.Clear();
 
-            foreach (var data in BoxDataList)
+            foreach (var data in _boxDataList)
             {
                 var oldColor = Gizmos.color;
                 var oldMatrix = Gizmos.matrix;
@@ -71,16 +71,16 @@ namespace NorthShore.Player
                 Gizmos.color = oldColor;
                 Gizmos.matrix = oldMatrix;
             }
-            BoxDataList.Clear();
+            _boxDataList.Clear();
 
-            foreach (var data in SphereDataList)
+            foreach (var data in _sphereDataList)
             {
                 var oldColor = Gizmos.color;
                 Gizmos.color = data.Color;
                 Gizmos.DrawWireSphere(data.Origin, data.Radius);
                 Gizmos.color = oldColor;
             }
-            SphereDataList.Clear();
+            _sphereDataList.Clear();
         }
 
         private void DrawCapsule(Vector3 origin, Vector3 direction, float radius, float distance, Color color)
