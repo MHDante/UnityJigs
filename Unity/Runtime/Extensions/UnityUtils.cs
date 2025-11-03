@@ -277,5 +277,13 @@ namespace UnityJigs.Extensions
 
         public static TransformEnumerable Children(this Transform parent) => new(parent);
         public static TransformEnumerable Children(this GameObject parent) => new(parent.transform);
+
+
+        public static void SyncTo(this Transform target, Transform source, bool includeLocalScale = false)
+        {
+            target.transform.position = source.position;
+            target.transform.rotation = source.rotation;
+            if (includeLocalScale) target.localScale = source.localScale;
+        }
     }
 }
