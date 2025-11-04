@@ -285,5 +285,8 @@ namespace UnityJigs.Extensions
             target.transform.rotation = source.rotation;
             if (includeLocalScale) target.localScale = source.localScale;
         }
+
+        public static T GetComponentCached<T>(this Component c, ref T? field) where T : Component =>
+            field ? field : field = c.GetComponent<T>();
     }
 }

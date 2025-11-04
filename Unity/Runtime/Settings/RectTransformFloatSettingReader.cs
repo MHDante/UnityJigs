@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityJigs.Extensions;
 
 namespace UnityJigs.Settings
 {
@@ -35,7 +36,7 @@ namespace UnityJigs.Settings
         public SyncTargets TargetDimension;
 
         private RectTransform? _rt;
-        public RectTransform RectTransform => _rt != null ? _rt : _rt = GetComponent<RectTransform>();
+        public RectTransform RectTransform => this.GetComponentCached(ref _rt);
 
         private void Update()
         {
