@@ -281,9 +281,21 @@ namespace UnityJigs.Extensions
 
         public static void SyncTo(this Transform target, Transform source, bool includeLocalScale = false)
         {
-            target.transform.position = source.position;
-            target.transform.rotation = source.rotation;
+            target.position = source.position;
+            target.rotation = source.rotation;
             if (includeLocalScale) target.localScale = source.localScale;
+        }
+        
+        public static void SyncTo(this Rigidbody target, Transform source)
+        {
+            target.position = source.position;
+            target.rotation = source.rotation;
+        }
+
+        public static void SyncTo(this Rigidbody target, Rigidbody source)
+        {
+            target.position = source.position;
+            target.rotation = source.rotation;
         }
 
         public static T GetComponentCached<T>(this Component c, ref T? field) where T : Component =>
