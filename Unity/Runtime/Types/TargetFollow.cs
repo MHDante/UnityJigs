@@ -1,6 +1,4 @@
-using System;
 using UnityEngine;
-using UnityJigs.Extensions;
 
 namespace UnityJigs.Types
 {
@@ -9,23 +7,18 @@ namespace UnityJigs.Types
     {
         public Transform? Target;
 
-        [Header("Update timing")]
-        public bool FollowOnFixedUpdate;
-        public bool FollowOnUpdate;
-        public bool FollowOnLateUpdate;
-        public bool FollowInEditor;
-
+        public UpdateTimingFlags UpdatesOn;
         [Header("Lerp Amount")]
-        [Range(0,1)] public float Lerp = 1;
+        [Range(0, 1)] public float Lerp = 1;
 
         [Header("If set, will use Rigidbody Interpolation Instead")]
         public Rigidbody? MyRigidbody;
 
         private void Reset() => MyRigidbody = GetComponent<Rigidbody>();
 
-        private void SyncIf(bool follow)
+        private void SyncIf(UpdateTimingFlags timing)
         {
-            if (!follow || !Target || (!Application.IsPlaying(this) && !FollowInEditor)) return;
+            if (!UpdatesOn.Applies(this, timing) || !Target) return;
 
             if (MyRigidbody)
             {
@@ -39,8 +32,8 @@ namespace UnityJigs.Types
             }
         }
 
-        private void FixedUpdate() => SyncIf(FollowOnFixedUpdate);
-        private void LateUpdate() => SyncIf(FollowOnLateUpdate);
-        private void Update() => SyncIf(FollowOnUpdate || (FollowInEditor && !Application.isPlaying));
+        private void FixedUpdate() => SyncIf(UpdateTimingFlags.FixedUpdate);
+        private void LateUpdate() => SyncIf(UpdateTimingFlags.LateUpdate);
+        private void Update() => SyncIf(UpdateTimingFlags.Update);
     }
 }
