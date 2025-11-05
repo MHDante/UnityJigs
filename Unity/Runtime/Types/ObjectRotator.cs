@@ -2,7 +2,7 @@
 using UnityJigs.Attributes;
 using UnityJigs.Types;
 
-namespace NorthShore
+namespace UnityJigs
 {
     [ExecuteAlways]
     public class ObjectRotator : MonoBehaviour

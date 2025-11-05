@@ -13,6 +13,7 @@ namespace UnityJigs.Types
 
         [Header("If set, will use Rigidbody Interpolation Instead")]
         public Rigidbody? MyRigidbody;
+        public float Force = 1f;
 
         private void Reset() => MyRigidbody = GetComponent<Rigidbody>();
 
@@ -22,8 +23,10 @@ namespace UnityJigs.Types
 
             if (MyRigidbody)
             {
+                var diff = (Target.position - MyRigidbody.position).normalized;
+                MyRigidbody.AddForce(diff * Force, ForceMode.Force);
                 MyRigidbody.rotation = Quaternion.Slerp(MyRigidbody.rotation, Target.rotation, Lerp);
-                MyRigidbody.position = Vector3.Lerp(MyRigidbody.position, Target.position, Lerp);
+                //MyRigidbody.position = Vector3.Lerp(MyRigidbody.position, Target.position, Lerp);
             }
             else
             {

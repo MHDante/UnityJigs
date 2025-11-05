@@ -18,7 +18,7 @@ namespace UnityJigs.Types
     {
         public static bool Applies(this UpdateTimingFlags flags, Object obj, UpdateTimingFlags flag)
         {
-            var isEditor = Application.IsPlaying(obj);
+            var isEditor = !Application.IsPlaying(obj);
             var hasEditorFlag = flags.HasFlag(UpdateTimingFlags.InEditor);
             if (isEditor && !hasEditorFlag) return false;
             if (flag == UpdateTimingFlags.Update && hasEditorFlag) return true;
