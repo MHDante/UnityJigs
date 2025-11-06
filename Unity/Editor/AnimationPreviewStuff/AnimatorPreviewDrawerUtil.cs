@@ -47,6 +47,10 @@ namespace UnityJigs.Editor
 
         private static readonly Func<object, float> GetCurrentTime;
         private static readonly Action<object, float> SetCurrentTime;
+        private static readonly Func<object, float> GetStartTime;
+        private static readonly Action<object, float> SetStartTime;
+        private static readonly Func<object, float> GetStopTime;
+        private static readonly Action<object, float> SetStopTime;
 
         private static readonly Func<object, float> GetNormalizedTime;
         private static readonly Action<object, float> SetNormalizedTime;
@@ -68,16 +72,19 @@ namespace UnityJigs.Editor
         static AnimationPreviewDrawerUtil()
         {
             AnimationClipEditorType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.AnimationClipEditor")
-                                      ?? throw new InvalidOperationException("Cannot find UnityEditor.AnimationClipEditor type.");
+                                      ?? throw new InvalidOperationException(
+                                          "Cannot find UnityEditor.AnimationClipEditor type.");
 
-            var avatarPreviewField = AnimationClipEditorType.GetField("m_AvatarPreview", BindingFlags.NonPublic | BindingFlags.Instance)
-                                     ?? throw new InvalidOperationException("Cannot find m_AvatarPreview field.");
+            var avatarPreviewField =
+                AnimationClipEditorType.GetField("m_AvatarPreview", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException("Cannot find m_AvatarPreview field.");
 
             GetAvatarPreview = BuildFieldGetter<object, object?>(avatarPreviewField);
             var avatarPreviewType = avatarPreviewField.FieldType;
 
             // AvatarPreview core fields
-            var previewDirField = avatarPreviewType.GetField("m_PreviewDir", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var previewDirField =
+                avatarPreviewType.GetField("m_PreviewDir", BindingFlags.NonPublic | BindingFlags.Instance)!;
             GetPreviewDir = BuildFieldGetter<object, Vector2>(previewDirField);
             SetPreviewDir = BuildFieldSetter<object, Vector2>(previewDirField);
 
@@ -85,7 +92,8 @@ namespace UnityJigs.Editor
             GetZoomFactor = BuildFieldGetter<object, float>(zoomField);
             SetZoomFactor = BuildFieldSetter<object, float>(zoomField);
 
-            var pivotField = avatarPreviewType.GetField("m_PivotPositionOffset", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var pivotField =
+                avatarPreviewType.GetField("m_PivotPositionOffset", BindingFlags.NonPublic | BindingFlags.Instance)!;
             GetPivotOffset = BuildFieldGetter<object, Vector3>(pivotField);
             SetPivotOffset = BuildFieldSetter<object, Vector3>(pivotField);
 
@@ -97,17 +105,21 @@ namespace UnityJigs.Editor
             GetIKOnFeet = BuildFieldGetter<object, bool>(ikField);
             SetIKOnFeet = BuildFieldSetter<object, bool>(ikField);
 
-            var showIKField = avatarPreviewType.GetField("m_ShowIKOnFeetButton", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var showIKField =
+                avatarPreviewType.GetField("m_ShowIKOnFeetButton", BindingFlags.NonPublic | BindingFlags.Instance)!;
             GetShowIKButton = BuildFieldGetter<object, bool>(showIKField);
             SetShowIKButton = BuildFieldSetter<object, bool>(showIKField);
 
             // Camera access
-            var previewUtilityField = avatarPreviewType.GetField("m_PreviewUtility", BindingFlags.NonPublic | BindingFlags.Instance)!;
-            var cameraProp = previewUtilityField.FieldType.GetProperty("camera", BindingFlags.Public | BindingFlags.Instance)!;
+            var previewUtilityField =
+                avatarPreviewType.GetField("m_PreviewUtility", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var cameraProp =
+                previewUtilityField.FieldType.GetProperty("camera", BindingFlags.Public | BindingFlags.Instance)!;
             GetCamera = BuildNestedPropertyGetter<object, Camera?>(previewUtilityField, cameraProp);
 
             // TimeControl fields & props
-            var timeControlField = avatarPreviewType.GetField("timeControl", BindingFlags.Public | BindingFlags.Instance)!;
+            var timeControlField =
+                avatarPreviewType.GetField("timeControl", BindingFlags.Public | BindingFlags.Instance)!;
             GetTimeControl = BuildFieldGetter<object, object?>(timeControlField);
             var timeControlType = timeControlField.FieldType;
 
@@ -120,6 +132,12 @@ namespace UnityJigs.Editor
             GetCurrentTime = BuildFieldGetter<object, float>(timeControlType.GetField("currentTime")!);
             SetCurrentTime = BuildFieldSetter<object, float>(timeControlType.GetField("currentTime")!);
 
+            GetStartTime = BuildFieldGetter<object, float>(timeControlType.GetField("startTime")!);
+            SetStartTime = BuildFieldSetter<object, float>(timeControlType.GetField("startTime")!);
+
+            GetStopTime = BuildFieldGetter<object, float>(timeControlType.GetField("stopTime")!);
+            SetStopTime = BuildFieldSetter<object, float>(timeControlType.GetField("stopTime")!);
+
             var normalizedTimeProp = timeControlType.GetProperty("normalizedTime")!;
             GetNormalizedTime = BuildPropertyGetter<object, float>(normalizedTimeProp);
             SetNormalizedTime = BuildPropertySetter<object, float>(normalizedTimeProp);
@@ -129,9 +147,10 @@ namespace UnityJigs.Editor
             SetPlaying = BuildPropertySetter<object, bool>(playingProp);
 
             // --- Reflect TimeControl constants ---
-            KScrubberHeight = (float)(timeControlType.GetField("kScrubberHeight", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) ?? 21f);
-            KPlayButtonWidth = (float)(timeControlType.GetField("kPlayButtonWidth", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) ?? 33f);
-
+            KScrubberHeight = (float)(timeControlType
+                .GetField("kScrubberHeight", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) ?? 21f);
+            KPlayButtonWidth = (float)(timeControlType
+                .GetField("kPlayButtonWidth", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) ?? 33f);
         }
 
         // ========================================================================
@@ -198,6 +217,9 @@ namespace UnityJigs.Editor
             if (_clipEditor == null)
                 return;
 
+            StartTime = 0.0f;
+            StopTime = _clip?.length ?? 1;
+
             var evt = Event.current;
 
             // Unity's TimeControl header occupies the top portion of the preview rect.
@@ -207,7 +229,7 @@ namespace UnityJigs.Editor
             // If user scrolls outside the 3D camera viewport, skip preview input this frame.
             if (evt.type == EventType.ScrollWheel && !insidePreview)
                 return;
-            if(HasPreviewGUI) _clipEditor.OnInteractivePreviewGUI(rect, GUIStyle.none);
+            if (HasPreviewGUI) _clipEditor.OnInteractivePreviewGUI(rect, GUIStyle.none);
         }
 
         /// <summary>
@@ -240,19 +262,28 @@ namespace UnityJigs.Editor
         public bool IKOnFeet
         {
             get => AvatarPreview != null && GetIKOnFeet(AvatarPreview);
-            set { if (AvatarPreview != null) SetIKOnFeet(AvatarPreview, value); }
+            set
+            {
+                if (AvatarPreview != null) SetIKOnFeet(AvatarPreview, value);
+            }
         }
 
         public bool ShowIKOnFeetButton
         {
             get => AvatarPreview != null && GetShowIKButton(AvatarPreview);
-            set { if (AvatarPreview != null) SetShowIKButton(AvatarPreview, value); }
+            set
+            {
+                if (AvatarPreview != null) SetShowIKButton(AvatarPreview, value);
+            }
         }
 
         public bool Is2D
         {
             get => AvatarPreview != null && GetIs2D(AvatarPreview);
-            set { if (AvatarPreview != null) SetIs2D(AvatarPreview, value); }
+            set
+            {
+                if (AvatarPreview != null) SetIs2D(AvatarPreview, value);
+            }
         }
 
         // ========================================================================
@@ -264,31 +295,64 @@ namespace UnityJigs.Editor
         public bool Playing
         {
             get => TimeControl != null && GetPlaying(TimeControl);
-            set { if (TimeControl != null) SetPlaying(TimeControl, value); }
+            set
+            {
+                if (TimeControl != null) SetPlaying(TimeControl, value);
+            }
         }
 
         public bool Loop
         {
             get => TimeControl != null && GetLoop(TimeControl);
-            set { if (TimeControl != null) SetLoop(TimeControl, value); }
+            set
+            {
+                if (TimeControl != null) SetLoop(TimeControl, value);
+            }
         }
 
         public float PlaybackSpeed
         {
             get => TimeControl != null ? GetPlaybackSpeed(TimeControl) : 1f;
-            set { if (TimeControl != null) SetPlaybackSpeed(TimeControl, value); }
+            set
+            {
+                if (TimeControl != null) SetPlaybackSpeed(TimeControl, value);
+            }
         }
 
         public float CurrentTime
         {
             get => TimeControl != null ? GetCurrentTime(TimeControl) : 0f;
-            set { if (TimeControl != null) SetCurrentTime(TimeControl, value); }
+            set
+            {
+                if (TimeControl != null) SetCurrentTime(TimeControl, value);
+            }
+        }
+
+        public float StartTime
+        {
+            get => TimeControl != null ? GetStartTime(TimeControl) : 0f;
+            set
+            {
+                if (TimeControl != null) SetStartTime(TimeControl, value);
+            }
+        }
+
+        public float StopTime
+        {
+            get => TimeControl != null ? GetStopTime(TimeControl) : 0f;
+            set
+            {
+                if (TimeControl != null) SetStopTime(TimeControl, value);
+            }
         }
 
         public float NormalizedTime
         {
             get => TimeControl != null ? GetNormalizedTime(TimeControl) : 0f;
-            set { if (TimeControl != null) SetNormalizedTime(TimeControl, value); }
+            set
+            {
+                if (TimeControl != null) SetNormalizedTime(TimeControl, value);
+            }
         }
 
         // ========================================================================
@@ -298,19 +362,28 @@ namespace UnityJigs.Editor
         public Vector2 PreviewAngles
         {
             get => AvatarPreview != null ? GetPreviewDir(AvatarPreview) : Vector2.zero;
-            set { if (AvatarPreview != null) SetPreviewDir(AvatarPreview, value); }
+            set
+            {
+                if (AvatarPreview != null) SetPreviewDir(AvatarPreview, value);
+            }
         }
 
         public float ZoomFactor
         {
             get => AvatarPreview != null ? GetZoomFactor(AvatarPreview) : 1f;
-            set { if (AvatarPreview != null) SetZoomFactor(AvatarPreview, value); }
+            set
+            {
+                if (AvatarPreview != null) SetZoomFactor(AvatarPreview, value);
+            }
         }
 
         public Vector3 PivotOffset
         {
             get => AvatarPreview != null ? GetPivotOffset(AvatarPreview) : Vector3.zero;
-            set { if (AvatarPreview != null) SetPivotOffset(AvatarPreview, value); }
+            set
+            {
+                if (AvatarPreview != null) SetPivotOffset(AvatarPreview, value);
+            }
         }
 
         public Camera? Camera => AvatarPreview != null ? GetCamera(AvatarPreview) : null;
@@ -322,7 +395,8 @@ namespace UnityJigs.Editor
         private static Func<TTarget, TField> BuildFieldGetter<TTarget, TField>(FieldInfo field)
         {
             var target = Expression.Parameter(typeof(TTarget), "t");
-            var body = Expression.Convert(Expression.Field(Expression.Convert(target, field.DeclaringType!), field), typeof(TField));
+            var body = Expression.Convert(Expression.Field(Expression.Convert(target, field.DeclaringType!), field),
+                typeof(TField));
             return Expression.Lambda<Func<TTarget, TField>>(body, target).Compile();
         }
 
@@ -340,7 +414,8 @@ namespace UnityJigs.Editor
         private static Func<TTarget, TProp> BuildPropertyGetter<TTarget, TProp>(PropertyInfo prop)
         {
             var target = Expression.Parameter(typeof(TTarget), "t");
-            var body = Expression.Convert(Expression.Property(Expression.Convert(target, prop.DeclaringType!), prop), typeof(TProp));
+            var body = Expression.Convert(Expression.Property(Expression.Convert(target, prop.DeclaringType!), prop),
+                typeof(TProp));
             return Expression.Lambda<Func<TTarget, TProp>>(body, target).Compile();
         }
 
@@ -355,7 +430,8 @@ namespace UnityJigs.Editor
             return Expression.Lambda<Action<TTarget, TProp>>(body, target, value).Compile();
         }
 
-        private static Func<TTarget, TResult> BuildNestedPropertyGetter<TTarget, TResult>(FieldInfo nestedField, PropertyInfo nestedProp)
+        private static Func<TTarget, TResult> BuildNestedPropertyGetter<TTarget, TResult>(FieldInfo nestedField,
+            PropertyInfo nestedProp)
         {
             var target = Expression.Parameter(typeof(TTarget), "t");
             var nested = Expression.Field(Expression.Convert(target, nestedField.DeclaringType!), nestedField);
