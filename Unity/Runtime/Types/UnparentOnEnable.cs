@@ -1,3 +1,4 @@
+using System;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityJigs.Attributes;
@@ -9,6 +10,11 @@ namespace UnityJigs
         [ReadOnly]public Transform Parent = null!;
         public bool RevertOnDisable = false;
 
+        [Header("Rigidbodies")]
+        public Rigidbody? MyRigidbody;
+        [ShowIf(nameof(MyRigidbody))]
+        public Rigidbody? ParentRigidbody;
+
         [Header("Layer Swap")]
         public bool SwapLayer = false;
         [ShowIf(nameof(SwapLayer))]
@@ -19,6 +25,11 @@ namespace UnityJigs
         private float _unparentTime = 0f;
         private int _oldLayer;
 
+        private void Reset()
+        {
+            if(!MyRigidbody)MyRigidbody = GetComponent<Rigidbody>();
+            if(!ParentRigidbody)MyRigidbody = GetComponentInParent<Rigidbody>();
+        }
 
         private void OnValidate() => Parent =  transform.parent;
         private void OnEnable()
@@ -28,8 +39,12 @@ namespace UnityJigs
             _oldLayer = gameObject.layer;
             if (SwapLayer && LayerSwapDelay <= 0) gameObject.layer = NewLayer;
             _unparentTime = Time.time;
+            if (MyRigidbody && ParentRigidbody)
+            {
+                MyRigidbody.linearVelocity = ParentRigidbody.linearVelocity;
+                MyRigidbody.angularVelocity = ParentRigidbody.angularVelocity;
+            }
         }
-
 
         private void Update()
         {
@@ -41,6 +56,11 @@ namespace UnityJigs
             if(!RevertOnDisable) return;
             transform.parent = Parent ? Parent : null;
             gameObject.layer = _oldLayer;
+            if (MyRigidbody)
+            {
+                MyRigidbody.linearVelocity = Vector3.zero;
+                MyRigidbody.angularVelocity = Vector3.zero;
+            }
         }
     }
 }
