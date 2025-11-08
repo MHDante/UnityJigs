@@ -1,4 +1,3 @@
-using System;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityJigs.Attributes;
@@ -8,7 +7,7 @@ namespace UnityJigs
     public class UnparentOnEnable : MonoBehaviour
     {
         [ReadOnly] public Transform Parent = null!;
-        public bool RevertOnDisable = false;
+        public bool RevertOnDisable;
 
         [Header("Rigidbodies")]
         public Rigidbody? MyRigidbody;
@@ -21,16 +20,16 @@ namespace UnityJigs
         [ShowIf(nameof(MyRigidbody))] [ShowIf(nameof(ClearExclusions))]
         public LayerMask NewExclusionLayer;
         [ShowIf(nameof(MyRigidbody))] [ShowIf(nameof(ClearExclusions))]
-        public float ClearExclusionsDelay = 0f;
+        public float ClearExclusionsDelay;
 
         [Header("Layer Swap")]
-        public bool SwapLayer = false;
+        public bool SwapLayer;
         [ShowIf(nameof(SwapLayer))]
         [Layer] public int NewLayer;
         [ShowIf(nameof(SwapLayer)), MinValue(0)]
-        public float LayerSwapDelay = 0f;
+        public float LayerSwapDelay;
 
-        private float _unparentTime = 0f;
+        private float _unparentTime;
         private int _oldLayer;
         private LayerMask _oldExclusionLayer;
 

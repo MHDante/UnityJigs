@@ -44,8 +44,6 @@ namespace UnityJigs.Fmod
                 });
         }
 
-        // --------------------------------------------------------------------
-
         public override void OnStateEnter(Animator? animator, AnimatorStateInfo stateInfo, int layerIndex)
         {
             base.OnStateEnter(animator, stateInfo, layerIndex);
@@ -63,8 +61,8 @@ namespace UnityJigs.Fmod
             base.OnStateUpdate(animator, stateInfo, layerIndex);
             if (Events.Count == 0 || _entries.Count == 0) return;
 
-            int frame = animator == null ? ++_editorTick : Time.frameCount;
-            float time = stateInfo.normalizedTime;
+            var frame = animator == null ? ++_editorTick : Time.frameCount;
+            var time = stateInfo.normalizedTime;
             var entry = FindBestEntryForUpdate(time, frame);
             if (entry == null) return;
 
@@ -81,23 +79,21 @@ namespace UnityJigs.Fmod
                 StopOldestEntry();
         }
 
-        // --------------------------------------------------------------------
-
         private void EvaluateEntry(Animator? animator, EntryContext entry, float time)
         {
-            float prevTime = entry.LastTime;
-            float prevFrac = Mathf.Repeat(prevTime, 1f);
-            float currFrac = Mathf.Repeat(time, 1f);
+            var prevTime = entry.LastTime;
+            var prevFrac = Mathf.Repeat(prevTime, 1f);
+            var currFrac = Mathf.Repeat(time, 1f);
 
-            bool previewMode = animator == null;
-            bool looped = previewMode
-                ? (currFrac + Mathf.Epsilon) < prevFrac
+            var previewMode = animator == null;
+            var looped = previewMode
+                ? currFrac + Mathf.Epsilon < prevFrac
                 : Mathf.FloorToInt(currFrac) != Mathf.FloorToInt(prevFrac);
 
             if (looped)
                 entry.FiredThisLoop.Clear();
 
-            for (int i = 0; i < Events.Count; i++)
+            for (var i = 0; i < Events.Count; i++)
             {
                 if (entry.FiredThisLoop.Contains(i))
                     continue;
@@ -106,8 +102,8 @@ namespace UnityJigs.Fmod
                 if (evt.AudioEvent.IsNull)
                     continue;
 
-                float t = Mathf.Clamp01(evt.NormalizedTime);
-                bool crossed =
+                var t = Mathf.Clamp01(evt.NormalizedTime);
+                var crossed =
                     (!looped && prevFrac - Mathf.Epsilon <= t && t <= currFrac + Mathf.Epsilon)
                     || (looped && (t >= prevFrac - Mathf.Epsilon || t <= currFrac + Mathf.Epsilon));
 
@@ -121,37 +117,42 @@ namespace UnityJigs.Fmod
 
         private void FireEvent(Animator? animator, AudioSMBEvent evt, EntryContext entry)
         {
+            EventInstance instance;
             if (animator == null)
             {
-                OnEditorPlay?.Invoke(evt.AudioEvent);
-                return;
+                var editorInstance = OnEditorPlay?.Invoke(evt.AudioEvent);
+                if(editorInstance == null) return;
+                instance = editorInstance.Value;
             }
-
-            var instance = evt.AudioEvent.CreateInstance();
-
-            if (_rigidbody != null)
-                instance.AttachTo(_rigidbody);
             else
             {
-                var targetTransform = _helper?.AudioOrigin != null ? _helper.AudioOrigin : animator.transform;
-                instance.AttachTo(targetTransform.gameObject);
+                instance = evt.AudioEvent.CreateInstance();
+
+                if (_rigidbody != null)
+                    instance.AttachTo(_rigidbody);
+                else
+                {
+                    var targetTransform = _helper?.AudioOrigin != null ? _helper.AudioOrigin : animator.transform;
+                    instance.AttachTo(targetTransform.gameObject);
+                }
+
+                instance.start();
             }
 
-            instance.start();
             entry.Instances.Add(instance);
         }
 
         private EntryContext? FindBestEntryForUpdate(float time, int frame)
         {
             EntryContext? best = null;
-            float bestDelta = float.MaxValue;
+            var bestDelta = float.MaxValue;
 
             foreach (var e in _entries)
             {
                 if (e.LastUpdatedFrame == frame)
                     continue;
 
-                float delta = time - e.LastTime;
+                var delta = time - e.LastTime;
                 if (delta >= 0f && delta < bestDelta)
                 {
                     best = e;
@@ -161,7 +162,7 @@ namespace UnityJigs.Fmod
 
             if (best == null && _entries.Count > 0)
             {
-                for (int i = _entries.Count - 1; i >= 0; i--)
+                for (var i = _entries.Count - 1; i >= 0; i--)
                     if (_entries[i].LastUpdatedFrame != frame)
                         return _entries[i];
             }

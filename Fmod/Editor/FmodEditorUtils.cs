@@ -6,16 +6,11 @@ namespace UnityJigs.Fmod.Editor
 {
     public static class FmodEditorUtils
     {
-        private static bool _LoadedBanks;
         private static readonly Dictionary<string, float> ParamValues = new();
 
         public static EventInstance PlayEditorSound(EventReference ev)
         {
-            if (!_LoadedBanks)
-            {
-                EditorUtils.LoadPreviewBanks();
-                _LoadedBanks = true;
-            }
+            if (!EditorUtils.PreviewBanksLoaded) EditorUtils.LoadPreviewBanks();
 
             var editorEventRef = EventManager.EventFromPath(ev.Path);
             var eventInstance = EditorUtils.PreviewEvent(editorEventRef, ParamValues);
@@ -24,11 +19,7 @@ namespace UnityJigs.Fmod.Editor
 
         public static EventInstance CreatePreviewInstance(EventReference ev)
         {
-            if (!_LoadedBanks)
-            {
-                EditorUtils.LoadPreviewBanks();
-                _LoadedBanks = true;
-            }
+            if (!EditorUtils.PreviewBanksLoaded) EditorUtils.LoadPreviewBanks();
 
             var editorEventRef = EventManager.EventFromPath(ev.Path);
             var eventInstance = CreatePreviewInstance(editorEventRef, ParamValues);
@@ -37,11 +28,9 @@ namespace UnityJigs.Fmod.Editor
 
         public static EventDescription GetEditorDescription(EventReference ev)
         {
-            if (!_LoadedBanks)
-            {
-                EditorUtils.LoadPreviewBanks();
-                _LoadedBanks = true;
-            }
+
+            if (!EditorUtils.PreviewBanksLoaded) EditorUtils.LoadPreviewBanks();
+
             System.getEventByID(ev.Guid, out var eventDescription);
             return eventDescription;
         }
