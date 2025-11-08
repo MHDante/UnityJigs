@@ -65,5 +65,14 @@ namespace UnityJigs.Editor.Utilities
             }
             Undo.CollapseUndoOperations(group);
         }
+
+        public static Rect ToEditorScreenRect(this Rect controlRect)
+        {
+            var min = GUIUtility.GUIToScreenPoint(controlRect.min);
+            return new Rect(min, controlRect.size);
+        }
+
+        public static Vector2 ToEditorScreenPoint(this Vector2 controlPoint) =>
+            GUIUtility.GUIToScreenPoint(controlPoint);
     }
 }

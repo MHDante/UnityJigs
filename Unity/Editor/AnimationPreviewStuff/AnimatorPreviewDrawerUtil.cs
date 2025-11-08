@@ -66,6 +66,11 @@ namespace UnityJigs.Editor
         // --- AvatarPreview layout constant (cannot be reflected; method-local const) ---
         private const float KSliderWidth = 150f;
 
+        private static int _ScrubberHint = "ScrubberIDHash".GetHashCode();
+
+        public static int ScrubberControlId => GUIUtility.GetControlID(_ScrubberHint, FocusType.Keyboard);
+
+
         // ========================================================================
         // Static constructor — builds all access delegates once
         // ========================================================================
@@ -248,10 +253,8 @@ namespace UnityJigs.Editor
             // Remove the slider region on the right (AvatarPreview subtracts a fixed 150f)
             rect.xMax -= KSliderWidth;
 
-            // Match Unity's slight vertical inset used around header elements
-            rect.yMin += 1f;
-            rect.yMax -= 1f;
-
+            rect.yMin -= 1;
+            rect.yMax += 1;
             return rect;
         }
 

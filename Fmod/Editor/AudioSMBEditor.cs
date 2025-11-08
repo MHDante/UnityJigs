@@ -14,7 +14,6 @@ namespace UnityJigs.Fmod.Editor
     [CustomEditor(typeof(AudioSMB), true)]
     public class AudioSMBEditor : OdinEditor, IMarkerTrackSource
     {
-
         static AudioSMBEditor() => AudioSMB.OnEditorPlay = FmodEditorUtils.PlayEditorSound;
 
         public AudioSMB AudioSMB => (AudioSMB)target;
@@ -22,6 +21,7 @@ namespace UnityJigs.Fmod.Editor
 
         public AnimationPreviewDrawerUtil ClipDrawer = null!;
         private MarkerTrackDrawer _markerTrack = null!;
+        public bool? ScrubState = null;
 
         public AnimationClip? Clip
         {
@@ -32,14 +32,13 @@ namespace UnityJigs.Fmod.Editor
         private int? _selectedMarker;
         private bool _wasPlaying;
 
-        // --------------------------------------------------------------------
-
         protected override void OnEnable()
         {
             base.OnEnable();
             ClipDrawer = new AnimationPreviewDrawerUtil();
             _markerTrack = new MarkerTrackDrawer(this);
             RefreshContext();
+            ScrubState = null;
         }
 
         protected override void OnDisable()
@@ -47,9 +46,8 @@ namespace UnityJigs.Fmod.Editor
             base.OnDisable();
             if (ClipDrawer != null!) ClipDrawer.Dispose();
             ClipDrawer = null!;
+            ScrubState = null;
         }
-
-        // --------------------------------------------------------------------
 
         public override void OnInspectorGUI()
         {
@@ -82,15 +80,12 @@ namespace UnityJigs.Fmod.Editor
             HandlePreviewPlayback();
         }
 
-        // ---------------------------------------------------------------
-        // Context + Preview logic
-        // ---------------------------------------------------------------
 
         private void RefreshContext()
         {
-            if(target is not Fmod.AudioSMB) return;
+            if (target is not Fmod.AudioSMB) return;
             _clips.Clear();
-            ClipDrawer.Clip = null;
+            Clip = null;
 
             var contexts = AnimatorController.FindStateMachineBehaviourContext(AudioSMB);
             if (contexts == null || contexts.Length == 0)
@@ -105,8 +100,8 @@ namespace UnityJigs.Fmod.Editor
                 CollectClipsFromMotion(state.motion);
             }
 
-            if (ClipDrawer.Clip == null && _clips.Count > 0)
-                ClipDrawer.Clip = _clips[0];
+            if (Clip == null && _clips.Count > 0)
+                Clip = _clips[0];
         }
 
         private void CollectClipsFromMotion(Motion? motion)
@@ -124,10 +119,9 @@ namespace UnityJigs.Fmod.Editor
             }
         }
 
-
         private void DrawPreviewArea()
         {
-            if (ClipDrawer.Clip == null)
+            if (Clip == null)
                 return;
 
             if (!ClipDrawer.HasPreviewGUI)
@@ -164,8 +158,24 @@ namespace UnityJigs.Fmod.Editor
                 }
             }
 
+
             // --- Marker track (above preview timeline) ---
-            _markerTrack.DrawLayout(ClipDrawer.Clip);
+            var trackerRect = _markerTrack.DrawLayout(Clip);
+
+            var timelineMarkerRect = MarkerTrackDrawer.GetTimelineRect(trackerRect);
+            timelineMarkerRect.y += timelineMarkerRect.height; // I don't know why this is needed.
+
+            if (Event.current.type == EventType.MouseDown && timelineMarkerRect.Contains(Event.current.mousePosition))
+            {
+                ScrubState = ClipDrawer.Playing;
+                ClipDrawer.Playing = false;
+            }
+
+            if (Event.current.type == EventType.MouseUp)
+            {
+                if (ScrubState.HasValue) ClipDrawer.Playing = ScrubState.Value;
+                ScrubState = null;
+            }
 
             // --- Preview area ---
             const float previewHeight = 180f;
@@ -197,9 +207,9 @@ namespace UnityJigs.Fmod.Editor
 
             foreach (var clip in _clips)
             {
-                bool excluded = evt?.ExcludedClips != null && evt.ExcludedClips.Contains(clip);
-                bool include = !excluded;
-                bool isPreview = (ClipDrawer.Clip == clip);
+                var excluded = evt?.ExcludedClips != null && evt.ExcludedClips.Contains(clip);
+                var include = !excluded;
+                var isPreview = Clip == clip;
 
                 // Background tint for current preview clip
                 var rect = EditorGUILayout.BeginHorizontal();
@@ -211,12 +221,12 @@ namespace UnityJigs.Fmod.Editor
                 }
 
                 // --- Left radio button for preview selection ---
-                bool selected = (ClipDrawer.Clip == clip);
-                bool newSelected = GUILayout.Toggle(selected, GUIContent.none, EditorStyles.radioButton,
+                var selected = Clip == clip;
+                var newSelected = GUILayout.Toggle(selected, GUIContent.none, EditorStyles.radioButton,
                     GUILayout.Width(18));
                 if (newSelected && !selected)
                 {
-                    ClipDrawer.Clip = clip;
+                    Clip = clip;
                     GUI.changed = true;
                 }
 
@@ -227,7 +237,7 @@ namespace UnityJigs.Fmod.Editor
                 EditorGUILayout.LabelField($"{clip.length:F2}s", GUILayout.Width(50));
 
                 // --- Right-hand inclusion checkbox ---
-                bool newInclude = GUILayout.Toggle(include, GUIContent.none, GUILayout.Width(18));
+                var newInclude = GUILayout.Toggle(include, GUIContent.none, GUILayout.Width(18));
 
                 EditorGUILayout.EndHorizontal();
 
@@ -248,17 +258,15 @@ namespace UnityJigs.Fmod.Editor
             SirenixEditorGUI.EndBox();
         }
 
-        // ---------------------------------------------------------------
-        // Preview Simulation Logic
-        // ---------------------------------------------------------------
-
         private void HandlePreviewPlayback()
         {
-            if (ClipDrawer.Clip == null)
+            if (Clip == null)
                 return;
 
             var isPlaying = ClipDrawer.Playing;
-            float currentTime = ClipDrawer.NormalizedTime;
+
+
+            var currentTime = ClipDrawer.NormalizedTime;
 
             if (!_wasPlaying && isPlaying)
             {
@@ -283,7 +291,7 @@ namespace UnityJigs.Fmod.Editor
         {
             var info = new AnimatorStateInfo();
             var type = typeof(AnimatorStateInfo);
-            BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
 
             type.GetField("m_Name", flags)?.SetValueDirect(__makeref(info), 0);
             type.GetField("m_Path", flags)?.SetValueDirect(__makeref(info), 0);
@@ -296,10 +304,6 @@ namespace UnityJigs.Fmod.Editor
             type.GetField("m_Loop", flags)?.SetValueDirect(__makeref(info), 1);
             return info;
         }
-
-        // ---------------------------------------------------------------
-        // IMarkerTrackSource Implementation
-        // ---------------------------------------------------------------
 
         public int GetMarkerCount() => AudioSMB.Events.Count;
         public float GetMarkerTime(int index) => AudioSMB.Events[index].NormalizedTime;

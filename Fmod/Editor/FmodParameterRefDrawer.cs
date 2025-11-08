@@ -94,15 +94,11 @@ namespace UnityJigs.Fmod.Editor
                 return next;
             }
 
-            if (meta.HasRange)
-            {
-                var min = meta.Min;
-                var max = meta.Max;
-                if (max > min && !float.IsInfinity(min) && !float.IsInfinity(max))
-                {
-                    return EditorGUI.Slider(fieldRect, value, min, max);
-                }
-            }
+            var min = meta.Min;
+            var max = meta.Max;
+
+            if (meta.HasRange && max > min && !float.IsInfinity(min) && !float.IsInfinity(max))
+                return EditorGUI.Slider(fieldRect, value, min, max);
 
             return EditorGUI.FloatField(fieldRect, value);
         }

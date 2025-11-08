@@ -66,7 +66,7 @@ namespace UnityJigs.Fmod.Editor
 
         private static readonly List<FmodParameterMeta> Empty = new()
         {
-            new FmodParameterMeta { Name = "<no parameters>", Min = 0, Max = 1, Default = 0, HasRange = true }
+            new() { Name = "<no parameters>", Min = 0, Max = 1, Default = 0, HasRange = true }
         };
     }
 }

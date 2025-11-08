@@ -28,14 +28,11 @@ namespace UnityJigs.Fmod.Editor
 
         public static EventDescription GetEditorDescription(EventReference ev)
         {
-
             if (!EditorUtils.PreviewBanksLoaded) EditorUtils.LoadPreviewBanks();
 
             System.getEventByID(ev.Guid, out var eventDescription);
             return eventDescription;
         }
-
-
 
         public static EventInstance CreatePreviewInstance(EditorEventRef eventRef, Dictionary<string, float> previewParamValues, float volume = 1, float startTime = 0.0f)
         {

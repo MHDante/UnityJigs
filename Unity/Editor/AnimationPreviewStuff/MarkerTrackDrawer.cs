@@ -30,18 +30,17 @@ namespace UnityJigs.Editor
 
         // --------------------------------------------------------------------
 
-        public void DrawLayout(AnimationClip? currentClip)
+        public Rect DrawLayout(AnimationClip? currentClip)
         {
             var rect = EditorGUILayout.GetControlRect(false, DefaultHeight);
             Draw(rect, currentClip);
+            return rect;
         }
 
         public void Draw(Rect controlRect, AnimationClip? currentClip)
         {
             // Derive timeline rect from AnimationPreviewDrawerUtil
-            var fakePreviewRect = controlRect;
-            fakePreviewRect.height = 300f; // only x/width matter
-            var timelineRect = AnimationPreviewDrawerUtil.GetTimelineRect(fakePreviewRect);
+            var timelineRect = GetTimelineRect(controlRect);
 
             // Our track sits directly above the timeline (touching)
             var trackRect = controlRect;
@@ -58,6 +57,14 @@ namespace UnityJigs.Editor
             // Button region to the right of the timeline
             var buttonRegion = new Rect(timelineRect.xMax + 4f, trackRect.y, ButtonSize * 2f, trackRect.height);
             DrawButtons(buttonRegion);
+        }
+
+        public static Rect GetTimelineRect(Rect markerTrackRect)
+        {
+            var fakePreviewRect = markerTrackRect;
+            fakePreviewRect.height = 300f; // only x/width matter
+            var timelineRect = AnimationPreviewDrawerUtil.GetTimelineRect(fakePreviewRect);
+            return timelineRect;
         }
 
         // --------------------------------------------------------------------
