@@ -20,18 +20,20 @@ namespace UnityJigs.Types
         private int _lastHash;
         private int _lastCount;
         private List<MeshCollider> Colliders { get; } = new();
+
+        public bool UpdateDynamically = false;
         protected abstract (List<Vector2> polygon, float height) GetSource();
+
+
+        private void Awake() => TryRebuild();
 
         private void Update()
         {
+            if(!UpdateDynamically) return;
             Colliders.RemoveAll(static it => !it);
             var hash = ComputeHash();
             if (hash != _lastHash || Colliders.Count != _lastCount || Colliders.Count == 0)
-            {
-                _lastHash = hash;
                 TryRebuild();
-                _lastCount = Colliders.Count;
-            }
         }
 
         private void OnValidate() => ApplyColliderSettings();
@@ -45,6 +47,10 @@ namespace UnityJigs.Types
             try
             {
                 Rebuild();
+
+                _lastHash = ComputeHash();
+                _lastCount = Colliders.Count;
+
                 _error = null;
             }
             catch (System.Exception ex)
