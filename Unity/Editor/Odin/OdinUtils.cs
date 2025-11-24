@@ -36,7 +36,7 @@ namespace UnityJigs.Editor.Odin
             bool persistent = false) =>
             s.SetOrCreate(key, !s.GetOrDefault(key, initialValue), persistent);
 
-        public static SerializedProperty ToSerializedProperty(this InspectorProperty inspectorProperty)
+        public static SerializedProperty? ToSerializedProperty(this InspectorProperty inspectorProperty)
         {
             string unityPropertyPath = inspectorProperty.UnityPropertyPath;
             return inspectorProperty.Tree.UnitySerializedObject.FindProperty(unityPropertyPath);

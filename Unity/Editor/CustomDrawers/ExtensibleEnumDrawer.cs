@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityJigs.Editor.Odin;
 
 public class ExtensibleEnumDrawer<TEnum, TKey, TPayload> : OdinValueDrawer<TEnum>
-    where TEnum : IExtensibleEnum<TKey, TPayload>
+    where TEnum : IExtensibleEnum<TKey, TPayload> where TKey : IEquatable<TKey>
 {
     private enum Mode
     {
@@ -26,14 +26,16 @@ public class ExtensibleEnumDrawer<TEnum, TKey, TPayload> : OdinValueDrawer<TEnum
         try
         {
             SirenixEditorGUI.BeginHorizontalPropertyLayout(label, out var rect);
-            EditorGUI.BeginProperty(rect, label, Property.ToSerializedProperty());
+            var serializedProp = Property.ToSerializedProperty();
+            if(serializedProp != null) EditorGUI.BeginProperty(rect, label, serializedProp);
+
             var buttonRect = GUILayoutUtility.GetRect(GUIContent.none, EditorStyles.popup);
-            if (EditorGUI.DropdownButton(buttonRect, new GUIContent( model.GetLabel(model.Key)), FocusType.Keyboard))
+            if (EditorGUI.DropdownButton(buttonRect, new GUIContent(model.GetLabel(model.Key)), FocusType.Keyboard))
                 DrawSelector(buttonRect);
 
-            SirenixEditorGUI.EndHorizontalPropertyLayout();
 
-            EditorGUI.EndProperty();
+            if(serializedProp != null) EditorGUI.EndProperty();
+            SirenixEditorGUI.EndHorizontalPropertyLayout();
         }
         catch (Exception e)
         {
@@ -56,7 +58,7 @@ public class ExtensibleEnumDrawer<TEnum, TKey, TPayload> : OdinValueDrawer<TEnum
 
         selector.EnableSingleClickToSelect();
 
-        selector.SelectionConfirmed += selection => SetKey(selection.FirstOrDefault());
+        selector.SelectionConfirmed += selection => SetKey(selection.First());
         var window = selector.ShowInPopup(rect, new Vector2(rect.width, 150));
         window.OnEndGUI += () => DrawFooter(window);
     }
@@ -96,7 +98,7 @@ public class ExtensibleEnumDrawer<TEnum, TKey, TPayload> : OdinValueDrawer<TEnum
             if (GUILayout.Button("✏️ Edit", GUILayout.Width(110)))
             {
                 window.Close();
-                model.Edit();
+                model.SelectItem();
             }
         }
 

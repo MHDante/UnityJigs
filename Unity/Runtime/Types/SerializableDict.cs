@@ -13,7 +13,6 @@ namespace UnityJigs.Types
         private IDictionary<TKey, TValue> Dictionary => _dictionary;
         [SerializeField] private List<SerializedKvp> SerializedValue = new();
 
-
         public static SerializedDict<TKey,TValue> Create<T>(IEnumerable<T> list, Func<T,TKey> keySelector, Func<T,TValue> valueSelector)
         {
             var dict = new SerializedDict<TKey, TValue>();
@@ -99,8 +98,5 @@ namespace UnityJigs.Types
             public TValue Value;
         }
     }
+
 }
-
-#if UNITY
-
-#endif
