@@ -3,7 +3,9 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
+using UnityJigs.Types;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 using Application = UnityEngine.Application;
@@ -285,7 +287,7 @@ namespace UnityJigs.Extensions
             target.rotation = source.rotation;
             if (includeLocalScale) target.localScale = source.localScale;
         }
-        
+
         public static void SyncTo(this Rigidbody target, Transform source)
         {
             target.position = source.position;
@@ -300,5 +302,47 @@ namespace UnityJigs.Extensions
 
         public static T GetComponentCached<T>(this Component c, ref T? field) where T : Component =>
             field ? field : field = c.GetComponent<T>();
+
+
+        public static Task LerpTo(this Transform transform, Transform target, float duration,
+            UpdateTimingFlags updateType = UpdateTimingFlags.Update) =>
+            LerpTo(transform, target.position, target.rotation, duration, updateType);
+
+        public static async Task LerpTo(this Transform transform, Vector3 position, Quaternion rotation, float duration,
+            UpdateTimingFlags updateType = UpdateTimingFlags.Update)
+        {
+            if (duration <= 0)
+            {
+                transform.position = position;
+                transform.rotation = rotation;
+            }
+
+            var start = Time.time;
+            var startPos = transform.position;
+            var startRot = transform.rotation;
+
+            while (true)
+            {
+                var t = Mathf.Clamp01((Time.time - start) / duration);
+                transform.position = Vector3.Lerp(startPos, position, t);
+                transform.rotation = Quaternion.Slerp(startRot, rotation, t);
+                if(t >= 1) break;
+                switch (updateType)
+                {
+                    case UpdateTimingFlags.Update:
+                        await Awaitable.NextFrameAsync();
+                        break;
+                    case UpdateTimingFlags.FixedUpdate:
+                        await Awaitable.FixedUpdateAsync();
+                        break;
+                    case UpdateTimingFlags.LateUpdate:
+                        await Awaitable.EndOfFrameAsync();
+                        break;
+                    case UpdateTimingFlags.InEditor:
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(updateType), updateType, null);
+                }
+            }
+        }
     }
 }
