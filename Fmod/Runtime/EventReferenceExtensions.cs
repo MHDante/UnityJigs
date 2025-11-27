@@ -14,7 +14,7 @@ namespace UnityJigs.Fmod
 
         public static EventInstance? CreateInstanceInRange(this EventReference reference, Vector3 position)
         {
-            if (!Settings.Instance.StopEventsOutsideMaxDistance)
+            if (!FMODUnity.Settings.Instance.StopEventsOutsideMaxDistance)
                 return RuntimeManager.CreateInstance(reference);
 
             var desc = reference.GetDescription();

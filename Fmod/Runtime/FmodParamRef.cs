@@ -1,4 +1,5 @@
 using System;
+using FMOD.Studio;
 using UnityEngine;
 
 namespace UnityJigs.Fmod
@@ -16,7 +17,7 @@ namespace UnityJigs.Fmod
 
         // A live instance you can bind at runtime or in-editor for preview.
         // Not serialized; you can re-bind on Awake/OnEnable/etc.
-        [NonSerialized] public FMOD.Studio.EventInstance EventInstance;
+        [NonSerialized] public EventInstance EventInstance;
 
         /// <summary>Set the parameter to a new value and push it to the bound EventInstance (if valid).</summary>
         public void Set(float value)
@@ -26,8 +27,15 @@ namespace UnityJigs.Fmod
                 EventInstance.setParameterByName(Name, value);
         }
 
+        /// <summary>Set the parameter to a new value and push it to the bound EventInstance (if valid).</summary>
+        public void SetOn(EventInstance instance, float value)
+        {
+            if (!string.IsNullOrEmpty(Name) && instance.isValid())
+                instance.setParameterByName(Name, value);
+        }
+
         /// <summary>Convenience: bind a live EventInstance and immediately sync the current Value.</summary>
-        public void Bind(FMOD.Studio.EventInstance instance)
+        public void Bind(EventInstance instance)
         {
             EventInstance = instance;
             if (!string.IsNullOrEmpty(Name) && EventInstance.isValid())
