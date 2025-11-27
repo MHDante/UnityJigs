@@ -26,6 +26,7 @@ namespace UnityJigs.Fmod
         }
 
 
+        public static EventInstance Play(this EventReference reference) => reference.CreateInstance().Start();
         public static EventInstance? Play(this EventReference reference, Vector3 position) =>
             reference.CreateInstanceInRange(position)?.AttachTo(position).Start();
 
