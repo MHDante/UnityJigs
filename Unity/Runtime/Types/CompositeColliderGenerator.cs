@@ -189,6 +189,8 @@ namespace UnityJigs.Types
             }
         }
 
+
+#if UNITY_6000_0_OR_NEWER
 #if UNITY_EDITOR
         [UnityEditor.MenuItem("Utils/CompositeCollider/Rebuild All")]
 #endif
@@ -221,5 +223,7 @@ namespace UnityJigs.Types
             var children = transform.Children().ToList();
             foreach (var child in children) child.gameObject.DestroySafe();
         }
+
+#endif
     }
 }

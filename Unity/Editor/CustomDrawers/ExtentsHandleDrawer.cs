@@ -34,7 +34,7 @@ namespace UnityJigs.Editor.CustomDrawers
 
             // Cache target references
             _component = Property.Tree.WeakTargets[0] as Component;
-            _transform = _component ? _component.transform : null;
+            _transform = _component != null ? _component.transform : null;
 
             // Prebuild delegate once
             _cachedHandler = OnSceneGUI;
@@ -49,7 +49,7 @@ namespace UnityJigs.Editor.CustomDrawers
 
         private void OnSceneGUI(SceneView sceneView)
         {
-            if (!_component || !_transform)
+            if (!_component || _transform == null)
                 return;
 
             if (!SceneView.currentDrawingSceneView)

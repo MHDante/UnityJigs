@@ -19,9 +19,9 @@ namespace UnityJigs.Types
 
         private void SyncIf(UpdateTimingFlags timing)
         {
-            if (!UpdatesOn.Applies(this, timing) || !Target) return;
+            if (!UpdatesOn.Applies(this, timing) || Target == null) return;
 
-            if (MyRigidbody)
+            if (MyRigidbody != null)
             {
                 var diff = (Target.position - MyRigidbody.position).normalized;
                 MyRigidbody.AddForce(diff * Force, ForceMode.Force);

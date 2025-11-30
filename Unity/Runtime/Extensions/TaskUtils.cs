@@ -66,7 +66,15 @@ namespace UnityJigs.Extensions
         public static async ValueTask WaitUntil<T>(T context, CancellationToken t,
             [RequireStaticDelegate] Func<T, bool> condition)
         {
-            while (!condition(context)) await Awaitable.NextFrameAsync(t);
+
+            while (!condition(context))
+            {
+#if UNITY_6000_0_OR_NEWER
+                await Awaitable.NextFrameAsync(t);
+#else
+                await Task.Yield();
+#endif
+            }
         }
 
         public static ValueTask FixedWaitUntil<T>(T context, [RequireStaticDelegate] Func<T, bool> condition) =>
@@ -75,7 +83,18 @@ namespace UnityJigs.Extensions
         public static async ValueTask FixedWaitUntil<T>(T context, CancellationToken t,
             [RequireStaticDelegate]Func<T, bool> condition)
         {
-            while (!condition(context)) await Awaitable.FixedUpdateAsync(t);
+            while (!condition(context))
+            {
+#if UNITY_6000_0_OR_NEWER
+                await Awaitable.NextFrameAsync(t);
+#else
+                await Task.Yield();
+#endif
+            }
         }
+
+
+
+        
     }
 }

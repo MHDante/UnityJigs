@@ -92,7 +92,7 @@ namespace UnityJigs.Editor.CustomDrawers
             var parentPath = Path.GetDirectoryName(textFilePath);
             var imageFilePath = Path.Join(parentPath, relativeImagePath);
             var importer = AssetImporter.GetAtPath(imageFilePath) as TextureImporter;
-            if (!importer) throw new Exception("Bad image path: " + imageFilePath);
+            if (importer == null) throw new Exception("Bad image path: " + imageFilePath);
             importer.isReadable = true;
 
             var metadata = new List<SpriteMetaData>();

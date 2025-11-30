@@ -20,7 +20,8 @@ namespace UnityJigs
         {
             if (!UpdatesOn.Applies(this, timing)) return;
 
-            if (MyRigidbody) MyRigidbody.rotation = Quaternion.AngleAxis(Speed * Time.deltaTime, Axis) * MyRigidbody.rotation;
+            if (MyRigidbody != null)
+                MyRigidbody.rotation = Quaternion.AngleAxis(Speed * Time.deltaTime, Axis) * MyRigidbody.rotation;
             else transform.Rotate(Axis, Speed * Time.deltaTime, Space.World);
         }
 

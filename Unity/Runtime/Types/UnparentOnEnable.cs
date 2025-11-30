@@ -1,3 +1,5 @@
+#if UNITY_6000_0_OR_NEWER
+
 using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityJigs.Attributes;
@@ -80,3 +82,5 @@ namespace UnityJigs
         }
     }
 }
+
+#endif

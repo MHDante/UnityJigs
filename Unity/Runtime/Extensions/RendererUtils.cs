@@ -1,8 +1,12 @@
+#if UNITY_6000_0_OR_NEWER
+
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
 namespace UnityJigs.Extensions
 {
+
+
     public static class RendererUtils
     {
         public static T? GetRenderFeature<T>() where T : ScriptableRendererFeature
@@ -22,3 +26,4 @@ namespace UnityJigs.Extensions
 
     }
 }
+#endif

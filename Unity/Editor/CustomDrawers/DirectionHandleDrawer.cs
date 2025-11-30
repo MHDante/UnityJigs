@@ -32,7 +32,7 @@ namespace UnityJigs.Editor.CustomDrawers
             _radius = Mathf.Max(0.01f, Attribute.Radius);
 
             _component = Property.Tree.WeakTargets[0] as Component;
-            _transform = _component ? _component.transform : null;
+            _transform = _component != null ? _component.transform : null;
 
             _cachedHandler = OnSceneGUI;
             SceneView.duringSceneGui -= _cachedHandler;
@@ -46,7 +46,7 @@ namespace UnityJigs.Editor.CustomDrawers
 
         private void OnSceneGUI(SceneView sceneView)
         {
-            if (!_component || !_transform)
+            if (!_component || _transform == null)
                 return;
 
 
@@ -84,7 +84,7 @@ namespace UnityJigs.Editor.CustomDrawers
             var sphereSize = HandleUtility.GetHandleSize(handlePos) * 0.1f;
 
             EditorGUI.BeginChangeCheck();
-            var newPos = Handles.FreeMoveHandle(handlePos, sphereSize, Vector3.zero,
+            var newPos = Handles.FreeMoveHandle(handlePos, Quaternion.identity, sphereSize, Vector3.zero,
                 Handles.SphereHandleCap);
             if (EditorGUI.EndChangeCheck())
             {

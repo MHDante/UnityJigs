@@ -3,9 +3,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using UnityEngine;
-using UnityJigs.Types;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 using Application = UnityEngine.Application;
@@ -301,8 +299,9 @@ namespace UnityJigs.Extensions
         }
 
         public static T GetComponentCached<T>(this Component c, ref T? field) where T : Component =>
-            field ? field : field = c.GetComponent<T>();
+            field ? field! : field = c.GetComponent<T>();
 
+#if UNITY_6000_0_OR_NEWER
 
         public static Task LerpTo(this Transform transform, Transform target, float duration,
             UpdateTimingFlags updateType = UpdateTimingFlags.Update) =>
@@ -344,5 +343,7 @@ namespace UnityJigs.Extensions
                 }
             }
         }
+
+#endif
     }
 }

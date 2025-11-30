@@ -10,7 +10,8 @@ namespace NorthShore.Player
         private readonly List<BoxData> _boxDataList = new();
 
         private static GizmoDrawer? _Instance;
-        private static GizmoDrawer Instance => _Instance ? _Instance : new GameObject().AddComponent<GizmoDrawer>();
+        private static GizmoDrawer Instance => _Instance != null ? _Instance :
+            new GameObject().AddComponent<GizmoDrawer>();
 
         private void Awake()
         {
