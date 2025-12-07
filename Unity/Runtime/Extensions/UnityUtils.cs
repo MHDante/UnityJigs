@@ -8,6 +8,11 @@ using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 using Application = UnityEngine.Application;
 
+#if UNITY_6000_0_OR_NEWER
+using System.Threading.Tasks;
+using UnityJigs.Types;
+#endif
+
 namespace UnityJigs.Extensions
 {
     public static class UnityUtils
@@ -299,7 +304,7 @@ namespace UnityJigs.Extensions
         }
 
         public static T GetComponentCached<T>(this Component c, ref T? field) where T : Component =>
-            field ? field! : field = c.GetComponent<T>();
+            field ? field : field = c.GetComponent<T>();
 
 #if UNITY_6000_0_OR_NEWER
 

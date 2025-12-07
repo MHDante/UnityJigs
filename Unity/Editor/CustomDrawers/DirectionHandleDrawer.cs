@@ -84,7 +84,7 @@ namespace UnityJigs.Editor.CustomDrawers
             var sphereSize = HandleUtility.GetHandleSize(handlePos) * 0.1f;
 
             EditorGUI.BeginChangeCheck();
-            var newPos = Handles.FreeMoveHandle(handlePos, Quaternion.identity, sphereSize, Vector3.zero,
+            var newPos = Handles.FreeMoveHandle(handlePos, sphereSize, Vector3.zero,
                 Handles.SphereHandleCap);
             if (EditorGUI.EndChangeCheck())
             {
