@@ -5,53 +5,105 @@ using UnityEngine.Pool;
 using Sirenix.OdinInspector;
 using UnityJigs.Extensions;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 namespace UnityJigs.Types
 {
     [ExecuteInEditMode]
     public abstract class CompositeColliderGenerator : MonoBehaviour
     {
+        private const float ShapeTolerance = 0.01f;
+
+        [System.Serializable]
+        private class BakedPolygon
+        {
+            public Vector2[] Points = System.Array.Empty<Vector2>();
+        }
+
         [SerializeField] private bool IsTrigger;
-#if UNITY_6000_0_OR_NEWER
         [SerializeField] private PhysicsMaterial? Material;
-#else
-        [SerializeField] private PhysicMaterial? Material;
-#endif
+
+        [SerializeField, HideInInspector] private float _bakedHeight;
+        [SerializeField, HideInInspector] private List<BakedPolygon> _bakedPolygons = new();
+
+        [SerializeField, HideInInspector] private int _lastHash;
+        [SerializeField, HideInInspector] private int _lastCount;
+
         private string? _error;
-        private int _lastHash;
-        private int _lastCount;
+        private bool _runtimeBuilt;
+
         private List<MeshCollider> Colliders { get; } = new();
 
         public bool UpdateDynamically = false;
+
         protected abstract (List<Vector2> polygon, float height) GetSource();
 
+        private void Awake()
+        {
+            if (Application.IsPlaying(this))
+            {
+                if (_bakedPolygons.Count == 0)
+                {
+                    try
+                    {
+                        BakeFromSource();
+                        _lastHash = ComputeShapeHash();
+                        _lastCount = _bakedPolygons.Count;
+                    }
+                    catch (System.Exception ex)
+                    {
+                        _error = ex.Message;
+                        Debug.LogException(ex, this);
+                    }
+                }
 
-        private void Awake() => TryRebuild();
+                BuildRuntimeColliders();
+            }
+            else
+            {
+                TryRebuild();
+            }
+        }
 
         private void Update()
         {
-            if(!UpdateDynamically) return;
-            Colliders.RemoveAll(static it => !it);
-            var hash = ComputeHash();
-            if (hash != _lastHash || Colliders.Count != _lastCount || Colliders.Count == 0)
+            if (!UpdateDynamically) return;
+            if (Application.IsPlaying(this)) return;
+
+            var hash = ComputeShapeHash();
+            if (hash != _lastHash || _bakedPolygons.Count != _lastCount)
                 TryRebuild();
         }
 
         private void OnValidate() => ApplyColliderSettings();
-
 
         [ShowInInspector,
          InfoBox("$" + nameof(_error), InfoMessageType.Error,
              VisibleIf = "@!string.IsNullOrEmpty(" + nameof(_error) + ")")]
         private void TryRebuild()
         {
+            if (Application.IsPlaying(this))
+            {
+                BuildRuntimeColliders();
+                return;
+            }
+
             try
             {
-                Rebuild();
+#if UNITY_EDITOR
+                var changed = Editor_BakeIfShapeChanged();
+                if (changed)
+                    _error = null;
 
-                _lastHash = ComputeHash();
-                _lastCount = Colliders.Count;
-
+                BuildPreviewColliders();
+#else
+                BakeFromSource();
+                _lastHash = ComputeShapeHash();
+                _lastCount = _bakedPolygons.Count;
                 _error = null;
+#endif
             }
             catch (System.Exception ex)
             {
@@ -63,34 +115,92 @@ namespace UnityJigs.Types
             }
         }
 
-        private void Rebuild()
+        private void BakeFromSource()
         {
-            Colliders.RemoveAll(static it => !it);
-            Colliders.Clear();
-            var childColliders = transform.Cast<Transform>().Select(it => it.GetComponent<MeshCollider>())
-                .WhereNotNull();
-            Colliders.AddRange(childColliders);
-
             var (polygon, height) = GetSource();
-            if (polygon.Count < 3) return;
+
+            _bakedPolygons.Clear();
+            _bakedHeight = height;
+
+            if (polygon.Count < 3)
+                return;
 
             using var _1 = ListPool<List<Vector2>>.Get(out var convexPolys);
             ConvexDecomposition2D.Decompose(polygon, convexPolys);
 
-            for (var i = convexPolys.Count; i < Colliders.Count; i++)
+            foreach (var poly in convexPolys)
             {
-                var excessCollider = Colliders[i];
-                excessCollider.gameObject.DestroySafe();
-                Colliders.RemoveAt(i);
-                i--;
+                var baked = new BakedPolygon
+                {
+                    Points = poly.ToArray()
+                };
+                _bakedPolygons.Add(baked);
+            }
+        }
+
+        private void BuildRuntimeColliders()
+        {
+            if (_runtimeBuilt) return;
+            _runtimeBuilt = true;
+
+            if (_bakedPolygons.Count == 0)
+            {
+                try
+                {
+                    BakeFromSource();
+                }
+                catch (System.Exception ex)
+                {
+                    _error = ex.Message;
+                    Debug.LogException(ex, this);
+                    return;
+                }
             }
 
-            for (int i = 0; i < convexPolys.Count; i++)
+            BuildCollidersFromBaked(true);
+        }
+
+#if UNITY_EDITOR
+        private void BuildPreviewColliders()
+        {
+            if (Application.IsPlaying(this)) return;
+            BuildCollidersFromBaked(false);
+        }
+#endif
+
+        private void BuildCollidersFromBaked(bool persistent)
+        {
+            Colliders.RemoveAll(static it => !it);
+
+            var childColliders = transform.Cast<Transform>()
+                .Select(t => t.GetComponent<MeshCollider>())
+                .WhereNotNull()
+                .ToList();
+
+            foreach (var mc in childColliders)
+                mc.gameObject.DestroySafe();
+
+            Colliders.Clear();
+
+            if (_bakedPolygons.Count == 0)
+                return;
+
+            for (var i = 0; i < _bakedPolygons.Count; i++)
             {
-                var mc = Colliders.GetSafe(i) ?? Colliders.AddAndGet(MakeCollider());
-                if(mc.sharedMesh == null) mc.sharedMesh = MakeMesh();
-                var poly = convexPolys[i];
-                CreateConvexPrism(poly, height, mc.sharedMesh);
+                var mc = MakeCollider(persistent);
+                Colliders.Add(mc);
+
+                var polyArray = _bakedPolygons[i].Points;
+                using var _1 = ListPool<Vector2>.Get(out var poly);
+                for (var j = 0; j < polyArray.Length; j++)
+                    poly.Add(polyArray[j]);
+
+                var mesh = mc.sharedMesh!;
+                CreateConvexPrism(poly, _bakedHeight, mesh);
+
+                // Force PhysX to recook from the final mesh contents.
+                mc.sharedMesh = null;
+                mc.sharedMesh = mesh;
             }
 
             ApplyColliderSettings();
@@ -143,10 +253,16 @@ namespace UnityJigs.Types
             mesh.RecalculateBounds();
         }
 
-        private MeshCollider MakeCollider()
+        private MeshCollider MakeCollider(bool persistent)
         {
             var child = new GameObject($"ConvexPiece_{Colliders.Count}");
             child.transform.SetParent(transform, false);
+
+#if UNITY_EDITOR
+            if (!persistent && !Application.IsPlaying(this))
+                child.hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild;
+#endif
+
             var mc = child.AddComponent<MeshCollider>();
             mc.convex = true;
             mc.sharedMesh = MakeMesh();
@@ -155,7 +271,7 @@ namespace UnityJigs.Types
 
         private Mesh MakeMesh()
         {
-            var mesh = new Mesh(); // fresh mesh in edit mode
+            var mesh = new Mesh();
             if (Application.IsPlaying(this)) mesh.MarkDynamic();
             return mesh;
         }
@@ -171,51 +287,69 @@ namespace UnityJigs.Types
             }
         }
 
+        private static float Quantize(float value) =>
+            Mathf.Round(value / ShapeTolerance) * ShapeTolerance;
 
-        private int ComputeHash()
+        private int ComputeShapeHash()
         {
             var (polygon, height) = GetSource();
             unchecked
             {
                 var hash = 17;
-                hash = hash * 31 + height.GetHashCode();
-                foreach (var p in polygon)
+                hash = hash * 31 + Quantize(height).GetHashCode();
+                for (var i = 0; i < polygon.Count; i++)
                 {
-                    hash = hash * 31 + p.x.GetHashCode();
-                    hash = hash * 31 + p.y.GetHashCode();
+                    var p = polygon[i];
+                    hash = hash * 31 + Quantize(p.x).GetHashCode();
+                    hash = hash * 31 + Quantize(p.y).GetHashCode();
                 }
 
                 return hash;
             }
         }
 
-
-#if UNITY_6000_0_OR_NEWER
 #if UNITY_EDITOR
-        [UnityEditor.MenuItem("Utils/CompositeCollider/Rebuild All")]
-#endif
-        public static void RebuildAll()
+        internal bool Editor_BakeIfShapeChanged()
         {
-            var generators =
-                FindObjectsByType<CompositeColliderGenerator>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            Debug.Log(generators.Length + " CompositeColliderGenerators found");
-            foreach (var generator in generators) generator.Rebuild();
-        }
+            var hash = ComputeShapeHash();
 
-
-#if UNITY_EDITOR
-        [UnityEditor.MenuItem("Utils/CompositeCollider/Destroy All Children")]
-#endif
-        public static void DestroyAllChildren()
-        {
-            var generators =
-                FindObjectsByType<CompositeColliderGenerator>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            Debug.Log(generators.Length + " CompositeColliderGenerators found");
-            foreach (var generator in generators)
+            if (_bakedPolygons.Count > 0 &&
+                hash == _lastHash &&
+                _bakedPolygons.Count == _lastCount)
             {
-                generator.DestroyChildren();
+                return false;
             }
+
+            BakeFromSource();
+            _lastHash = hash;
+            _lastCount = _bakedPolygons.Count;
+            return true;
         }
+
+        internal void Editor_DestroyColliderChildrenImmediate()
+        {
+            var allColliders = GetComponentsInChildren<MeshCollider>(true);
+
+            var toDestroy = new List<GameObject>();
+            foreach (var mc in allColliders)
+            {
+                if (!mc) continue;
+                var go = mc.gameObject;
+                if (go == gameObject) continue;
+
+                var status = PrefabUtility.GetPrefabInstanceStatus(go);
+                if (status != PrefabInstanceStatus.NotAPrefab)
+                    continue;
+
+                toDestroy.Add(go);
+            }
+
+            foreach (var go in toDestroy.Distinct())
+                go.DestroySafe();
+
+            Colliders.Clear();
+        }
+#endif
 
         [Button]
         private void DestroyChildren()
@@ -224,6 +358,42 @@ namespace UnityJigs.Types
             foreach (var child in children) child.gameObject.DestroySafe();
         }
 
-#endif
+        private void OnDrawGizmosSelected()
+        {
+            Gizmos.color = new Color(0f, 0.5f, 1f, 1f);
+
+            var meshColliders = Colliders.Where(mc => mc && mc.sharedMesh).ToList();
+            if (meshColliders.Count == 0)
+            {
+                meshColliders = GetComponentsInChildren<MeshCollider>(true)
+                    .Where(mc => mc && mc.sharedMesh)
+                    .ToList();
+            }
+
+            foreach (var mc in meshColliders)
+            {
+                var mesh = mc.sharedMesh;
+                if (!mesh) continue;
+
+                var verts = mesh.vertices;
+                var tris = mesh.triangles;
+
+                var oldMatrix = Gizmos.matrix;
+                Gizmos.matrix = mc.transform.localToWorldMatrix;
+
+                for (var i = 0; i < tris.Length; i += 3)
+                {
+                    var a = verts[tris[i]];
+                    var b = verts[tris[i + 1]];
+                    var c = verts[tris[i + 2]];
+
+                    Gizmos.DrawLine(a, b);
+                    Gizmos.DrawLine(b, c);
+                    Gizmos.DrawLine(c, a);
+                }
+
+                Gizmos.matrix = oldMatrix;
+            }
+        }
     }
 }
