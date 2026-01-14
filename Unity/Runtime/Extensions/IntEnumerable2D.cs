@@ -29,24 +29,24 @@ namespace UnityJigs.Extensions
         public struct Enumerator : IEnumerator<Vector2Int>
         {
             private readonly IntEnumerable2D _enumerable;
-            private Vector2Int current;
-            public Vector2Int Current => current;
-            private bool isStarted;
+            private Vector2Int _current;
+            public Vector2Int Current => _current;
+            private bool _isStarted;
 
             public Enumerator(IntEnumerable2D enumerable)
             {
-                current = default;
-                isStarted = false;
+                _current = default;
+                _isStarted = false;
                 _enumerable = enumerable;
             }
 
             public bool MoveNext()
             {
 
-                if (!isStarted)
+                if (!_isStarted)
                 {
-                    current = _enumerable._start;
-                    isStarted = true;
+                    _current = _enumerable._start;
+                    _isStarted = true;
 
                     if (_enumerable._start.x >= _enumerable._end.x) return false;
                     if (_enumerable._start.y >= _enumerable._end.y) return false;
@@ -55,28 +55,28 @@ namespace UnityJigs.Extensions
 
                 if (_enumerable._xThenY)
                 {
-                    current.x += _enumerable._increment.x;
-                    if (current.x >= _enumerable._end.x)
+                    _current.x += _enumerable._increment.x;
+                    if (_current.x >= _enumerable._end.x)
                     {
-                        current.x = _enumerable._start.x;
-                        current.y += _enumerable._increment.y;
-                        if (current.y >= _enumerable._end.y) return false;
+                        _current.x = _enumerable._start.x;
+                        _current.y += _enumerable._increment.y;
+                        if (_current.y >= _enumerable._end.y) return false;
                     }
                 }
                 else
                 {
-                    current.y += _enumerable._increment.y;
-                    if (current.y >= _enumerable._end.y)
+                    _current.y += _enumerable._increment.y;
+                    if (_current.y >= _enumerable._end.y)
                     {
-                        current.y = _enumerable._start.y;
-                        current.x += _enumerable._increment.x;
-                        if (current.x >= _enumerable._end.x) return false;
+                        _current.y = _enumerable._start.y;
+                        _current.x += _enumerable._increment.x;
+                        if (_current.x >= _enumerable._end.x) return false;
                     }
                 }
 
                 return true;
             }
-            public void Reset() => isStarted = false;
+            public void Reset() => _isStarted = false;
             object IEnumerator.Current => Current;
             public void Dispose() { }
         }

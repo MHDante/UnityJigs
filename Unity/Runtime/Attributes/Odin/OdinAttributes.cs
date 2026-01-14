@@ -56,7 +56,7 @@ namespace UnityJigs.Attributes.Odin
     public class HandlesAttribute : Attribute
     {
         public readonly string Color;
-        public bool DrawOnlyWhenExpanded = false;
+        public readonly bool DrawOnlyWhenExpanded;
         public HandlesAttribute(string color = "black", bool drawOnlyWhenExpanded = true)
         {
             Color = color;

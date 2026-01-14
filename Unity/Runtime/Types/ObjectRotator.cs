@@ -1,8 +1,7 @@
 ﻿using UnityEngine;
 using UnityJigs.Attributes;
-using UnityJigs.Types;
 
-namespace UnityJigs
+namespace UnityJigs.Types
 {
     [ExecuteAlways]
     public class ObjectRotator : MonoBehaviour

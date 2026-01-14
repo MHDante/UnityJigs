@@ -1,10 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.Pool;
-using Sirenix.OdinInspector;
+using UnityEngine.Serialization;
 using UnityJigs.Extensions;
-
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -16,27 +17,27 @@ namespace UnityJigs.Types
     {
         private const float ShapeTolerance = 0.01f;
 
-        [System.Serializable]
+        [Serializable]
         private class BakedPolygon
         {
-            public Vector2[] Points = System.Array.Empty<Vector2>();
+            public Vector2[] Points = Array.Empty<Vector2>();
         }
 
         [SerializeField] private bool IsTrigger;
         [SerializeField] private PhysicsMaterial? Material;
 
-        [SerializeField, HideInInspector] private float _bakedHeight;
-        [SerializeField, HideInInspector] private List<BakedPolygon> _bakedPolygons = new();
+        [FormerlySerializedAs("_bakedHeight")] [SerializeField, HideInInspector] private float BakedHeight;
+        [FormerlySerializedAs("_bakedPolygons")] [SerializeField, HideInInspector] private List<BakedPolygon> BakedPolygons = new();
 
-        [SerializeField, HideInInspector] private int _lastHash;
-        [SerializeField, HideInInspector] private int _lastCount;
+        [FormerlySerializedAs("_lastHash")] [SerializeField, HideInInspector] private int LastHash;
+        [FormerlySerializedAs("_lastCount")] [SerializeField, HideInInspector] private int LastCount;
 
         private string? _error;
         private bool _runtimeBuilt;
 
         private List<MeshCollider> Colliders { get; } = new();
 
-        public bool UpdateDynamically = false;
+        public bool UpdateDynamically;
 
         protected abstract (List<Vector2> polygon, float height) GetSource();
 
@@ -44,15 +45,15 @@ namespace UnityJigs.Types
         {
             if (Application.IsPlaying(this))
             {
-                if (_bakedPolygons.Count == 0)
+                if (BakedPolygons.Count == 0)
                 {
                     try
                     {
                         BakeFromSource();
-                        _lastHash = ComputeShapeHash();
-                        _lastCount = _bakedPolygons.Count;
+                        LastHash = ComputeShapeHash();
+                        LastCount = BakedPolygons.Count;
                     }
-                    catch (System.Exception ex)
+                    catch (Exception ex)
                     {
                         _error = ex.Message;
                         Debug.LogException(ex, this);
@@ -73,7 +74,7 @@ namespace UnityJigs.Types
             if (Application.IsPlaying(this)) return;
 
             var hash = ComputeShapeHash();
-            if (hash != _lastHash || _bakedPolygons.Count != _lastCount)
+            if (hash != LastHash || BakedPolygons.Count != LastCount)
                 TryRebuild();
         }
 
@@ -105,7 +106,7 @@ namespace UnityJigs.Types
                 _error = null;
 #endif
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 if (_error != ex.Message)
                 {
@@ -119,8 +120,8 @@ namespace UnityJigs.Types
         {
             var (polygon, height) = GetSource();
 
-            _bakedPolygons.Clear();
-            _bakedHeight = height;
+            BakedPolygons.Clear();
+            BakedHeight = height;
 
             if (polygon.Count < 3)
                 return;
@@ -134,7 +135,7 @@ namespace UnityJigs.Types
                 {
                     Points = poly.ToArray()
                 };
-                _bakedPolygons.Add(baked);
+                BakedPolygons.Add(baked);
             }
         }
 
@@ -143,13 +144,13 @@ namespace UnityJigs.Types
             if (_runtimeBuilt) return;
             _runtimeBuilt = true;
 
-            if (_bakedPolygons.Count == 0)
+            if (BakedPolygons.Count == 0)
             {
                 try
                 {
                     BakeFromSource();
                 }
-                catch (System.Exception ex)
+                catch (Exception ex)
                 {
                     _error = ex.Message;
                     Debug.LogException(ex, this);
@@ -182,21 +183,21 @@ namespace UnityJigs.Types
 
             Colliders.Clear();
 
-            if (_bakedPolygons.Count == 0)
+            if (BakedPolygons.Count == 0)
                 return;
 
-            for (var i = 0; i < _bakedPolygons.Count; i++)
+            for (var i = 0; i < BakedPolygons.Count; i++)
             {
                 var mc = MakeCollider(persistent);
                 Colliders.Add(mc);
 
-                var polyArray = _bakedPolygons[i].Points;
+                var polyArray = BakedPolygons[i].Points;
                 using var _1 = ListPool<Vector2>.Get(out var poly);
                 for (var j = 0; j < polyArray.Length; j++)
                     poly.Add(polyArray[j]);
 
                 var mesh = mc.sharedMesh!;
-                CreateConvexPrism(poly, _bakedHeight, mesh);
+                CreateConvexPrism(poly, BakedHeight, mesh);
 
                 // Force PhysX to recook from the final mesh contents.
                 mc.sharedMesh = null;
@@ -313,16 +314,16 @@ namespace UnityJigs.Types
         {
             var hash = ComputeShapeHash();
 
-            if (_bakedPolygons.Count > 0 &&
-                hash == _lastHash &&
-                _bakedPolygons.Count == _lastCount)
+            if (BakedPolygons.Count > 0 &&
+                hash == LastHash &&
+                BakedPolygons.Count == LastCount)
             {
                 return false;
             }
 
             BakeFromSource();
-            _lastHash = hash;
-            _lastCount = _bakedPolygons.Count;
+            LastHash = hash;
+            LastCount = BakedPolygons.Count;
             return true;
         }
 

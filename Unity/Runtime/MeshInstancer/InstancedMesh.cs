@@ -1,7 +1,7 @@
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace UnityJigs.Components
+namespace UnityJigs.MeshInstancer
 {
     [CreateAssetMenu(menuName = "Jigs/Instanced Mesh", fileName = "InstancedMesh", order = 0)]
     public class InstancedMesh : ScriptableObject

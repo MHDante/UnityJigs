@@ -1,12 +1,15 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityJigs.Types; // CompositeColliderGenerator namespace
+using Object = UnityEngine.Object;
 
-namespace UnityJigs.Editor
+// CompositeColliderGenerator namespace
+
+namespace UnityJigs.Types
 {
     public static class CompositeColliderCleanup
     {
@@ -122,7 +125,7 @@ namespace UnityJigs.Editor
 
             public string? AssetPath;         // null for scene
             public string? PrefabPathInAsset; // null for scene
-            public int[] SiblingPathInAsset = System.Array.Empty<int>(); // for prefab nodes
+            public int[] SiblingPathInAsset = Array.Empty<int>(); // for prefab nodes
         }
 
         // --------------------------------------------------------------------
@@ -222,7 +225,7 @@ namespace UnityJigs.Editor
                     SceneTransform = info.SceneTransform,
                     AssetPath = null,
                     PrefabPathInAsset = null,
-                    SiblingPathInAsset = System.Array.Empty<int>()
+                    SiblingPathInAsset = Array.Empty<int>()
                 });
 
                 // Higher levels: prefab / variant chain
@@ -325,7 +328,7 @@ namespace UnityJigs.Editor
             return indices.ToArray();
         }
 
-        private static string GetHierarchyPath(Transform t, Transform root = null)
+        private static string GetHierarchyPath(Transform t, Transform? root = null)
         {
             var names = new List<string>();
             var current = t;

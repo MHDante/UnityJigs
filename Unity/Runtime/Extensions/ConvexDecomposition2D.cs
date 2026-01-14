@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Pool;
@@ -17,7 +18,7 @@ namespace UnityJigs.Extensions
             if (polygon.Count < 3) return 0;
 
             if (HasSelfIntersections(polygon))
-                throw new System.InvalidOperationException("Input polygon is self-intersecting. Cannot decompose.");
+                throw new InvalidOperationException("Input polygon is self-intersecting. Cannot decompose.");
 
 
             // Ensure CCW orientation for ear clipping.

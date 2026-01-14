@@ -49,6 +49,26 @@ namespace UnityJigs.Extensions
         }
 
 
+        public static Task<T> ToTask<T>(this Action<Action<T>> subscribe, CancellationToken ct = default)
+        {
+            var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var ctr = ct.Register(() => tcs.TrySetCanceled());
+            if (ct.IsCancellationRequested) return Task.FromCanceled<T>(ct);
+            subscribe(tcs.SetResult);
+            tcs.Task.ContinueWith(_ => ctr.Dispose(), ct);
+            return tcs.Task;
+        }
+    
+        public static Task ToTask(this Action<Action> subscribe, CancellationToken ct = default)
+        {
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var ctr = ct.Register(() => tcs.TrySetCanceled());
+            if (ct.IsCancellationRequested) return Task.FromCanceled(ct);
+            subscribe(()=> tcs.SetResult(null));
+            tcs.Task.ContinueWith(_ => ctr.Dispose(), ct);
+            return tcs.Task;
+        }
+        
         public static void LogErrors(this Task task)
         {
             task.ContinueWith(static it =>

@@ -11,14 +11,14 @@ namespace UnityJigs.Extensions
 
         private struct Context<TContext>
         {
-            public TContext _context;
+            public TContext Ctx;
             public Func<TContext, Vector2Int, bool> CanEnterContext;
             public Func<TContext, Vector2Int, bool> IsTargetContext;
             public Func<Vector2Int, bool> CanEnterSimple;
             public Func<Vector2Int, bool> IsTargetSimple;
 
-            public bool CanEnter(Vector2Int i) => CanEnterContext?.Invoke(_context, i) ?? CanEnterSimple(i);
-            public bool IsTarget(Vector2Int i) => IsTargetContext?.Invoke(_context, i) ?? IsTargetSimple(i);
+            public bool CanEnter(Vector2Int i) => CanEnterContext?.Invoke(Ctx, i) ?? CanEnterSimple(i);
+            public bool IsTarget(Vector2Int i) => IsTargetContext?.Invoke(Ctx, i) ?? IsTargetSimple(i);
         }
 
         public static List<Vector2Int>? BFS<TContext>(
@@ -26,7 +26,7 @@ namespace UnityJigs.Extensions
             TContext context,
             Func<TContext, Vector2Int, bool> canEnter,
             Func<TContext, Vector2Int, bool> isTarget)  =>
-            BFS<TContext>(start, new() { CanEnterContext = canEnter, IsTargetContext = isTarget, _context = context});
+            BFS<TContext>(start, new() { CanEnterContext = canEnter, IsTargetContext = isTarget, Ctx = context});
 
         public static List<Vector2Int>? BFS(
             Vector2Int start,

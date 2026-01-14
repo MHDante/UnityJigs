@@ -3,7 +3,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using UnityEngine;
 
-namespace UnityJigs.Editor
+namespace UnityJigs.Editor.AnimationPreview
 {
     /// <summary>
     /// High-performance reflective wrapper for Unity's internal <c>AvatarPreview</c>
@@ -66,9 +66,9 @@ namespace UnityJigs.Editor
         // --- AvatarPreview layout constant (cannot be reflected; method-local const) ---
         private const float KSliderWidth = 150f;
 
-        private static int _ScrubberHint = "ScrubberIDHash".GetHashCode();
+        private static readonly int ScrubberHint = "ScrubberIDHash".GetHashCode();
 
-        public static int ScrubberControlId => GUIUtility.GetControlID(_ScrubberHint, FocusType.Keyboard);
+        public static int ScrubberControlId => GUIUtility.GetControlID(ScrubberHint, FocusType.Keyboard);
 
 
         // ========================================================================

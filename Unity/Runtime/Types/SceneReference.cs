@@ -4,7 +4,6 @@ using System.Linq;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-
 #if UNITY_EDITOR
 using Sirenix.Utilities;
 using Sirenix.Utilities.Editor;
@@ -50,7 +49,7 @@ namespace UnityJigs.Types
         private void UpdatePath() => ScenePath = AssetDatabase.GUIDToAssetPath(SceneGuid);
 
         [ShowInInspector ,ValueDropdown(nameof(GetSceneAssets))][ CustomValueDrawer(nameof(DrawSceneReference)), OnValueChanged(nameof(UpdateAsset))]
-        private SceneAsset? Scene;
+        private SceneAsset? _scene;
 
         private bool IsInBuild => SceneUtility.GetBuildIndexByScenePath(ScenePath) >= 0;
 
@@ -64,14 +63,14 @@ namespace UnityJigs.Types
 
         private void UpdateAsset()
         {
-            ScenePath = AssetDatabase.GetAssetPath(Scene);
+            ScenePath = AssetDatabase.GetAssetPath(_scene);
             SceneGuid = AssetDatabase.GUIDFromAssetPath(ScenePath).ToString();
-            Scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
+            _scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
         }
 
         private SceneAsset? DrawSceneReference(Func<GUIContent, bool> callNextDrawer)
         {
-            if(Scene == null) Scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
+            if(_scene == null) _scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
 
             EditorGUILayout.BeginHorizontal();
 
@@ -91,7 +90,7 @@ namespace UnityJigs.Types
 
             EditorGUILayout.EndHorizontal();
 
-            return Scene;
+            return _scene;
         }
 
         private void DrawTooltip(Rect rect, string tooltip)

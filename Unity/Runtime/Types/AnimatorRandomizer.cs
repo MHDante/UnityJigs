@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace NorthShore
+namespace UnityJigs.Types
 {
     [RequireComponent(typeof(Animator))]
     public class AnimatorRandomizer : MonoBehaviour

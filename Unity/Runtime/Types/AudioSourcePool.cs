@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace UnityJigs
+namespace UnityJigs.Types
 {
     public class AudioSourcePool : MonoBehaviour
     {

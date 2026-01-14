@@ -8,7 +8,7 @@ namespace UnityJigs.Components
     {
         [Required] public Camera Target = null!;
         [Required] public Camera Source = null!;
-        public float NearClipOffset = 0f;
+        public float NearClipOffset;
 
         private void Update()
         {

@@ -27,8 +27,8 @@ namespace UnityJigs.Settings
             [Required, InlineEditor(Expanded = true)] public FloatReference Source;
         }
 
-        [HideInInspector] public bool Negate = false;
-        [HideInInspector] public FloatReference? Source = null;
+        [HideInInspector] public bool Negate;
+        [HideInInspector] public FloatReference? Source;
 
         [TableList]
         public List<Entry> Entries = new();

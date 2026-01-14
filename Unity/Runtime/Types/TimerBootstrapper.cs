@@ -3,7 +3,6 @@ using JetBrains.Annotations;
 using UnityEngine;
 using UnityEngine.LowLevel;
 using UnityEngine.PlayerLoop;
-
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -25,7 +24,7 @@ namespace UnityJigs.Types
         bool InsertSystem(int index)
         {
             PlayerLoopSystem currentPlayerLoop = PlayerLoop.GetCurrentPlayerLoop();
-            _systemRef = new PlayerLoopSystem()
+            _systemRef = new PlayerLoopSystem
             {
                 type = GetType(),
                 updateDelegate = Update,
@@ -36,7 +35,7 @@ namespace UnityJigs.Types
             if (!didInsert)
             {
                 Debug.LogError($"Could not initialize system of type {GetType().Name}. " +
-                               $"Did you provide a valid parent system type?");
+                               "Did you provide a valid parent system type?");
                 return false;
             }
 

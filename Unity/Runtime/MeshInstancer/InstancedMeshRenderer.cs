@@ -1,7 +1,7 @@
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace UnityJigs.Components
+namespace UnityJigs.MeshInstancer
 {
     [ExecuteAlways]
     public class InstancedMeshRenderer : MonoBehaviour

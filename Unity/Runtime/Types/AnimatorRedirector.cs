@@ -2,9 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityJigs.Extensions;
-using UnityJigs.Types;
 
-namespace NorthShore
+namespace UnityJigs.Types
 {
     [RequireComponent(typeof(Animator))]
     public class AnimatorEventRedirector : MonoBehaviour

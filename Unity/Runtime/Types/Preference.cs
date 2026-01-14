@@ -1,3 +1,4 @@
+using UnityEditor;
 using UnityEngine;
 
 namespace UnityJigs.Types
@@ -47,8 +48,8 @@ namespace UnityJigs.Types
 #if UNITY_EDITOR
             protected override string EditorValue
             {
-                get => UnityEditor.EditorPrefs.GetString(_key, DefaultValue);
-                set => UnityEditor.EditorPrefs.SetString(_key, value);
+                get => EditorPrefs.GetString(_key, DefaultValue);
+                set => EditorPrefs.SetString(_key, value);
             }
 #endif
 
@@ -66,8 +67,8 @@ namespace UnityJigs.Types
 #if UNITY_EDITOR
             protected override int EditorValue
             {
-                get => UnityEditor.EditorPrefs.GetInt(_key, DefaultValue);
-                set => UnityEditor.EditorPrefs.SetInt(_key, value);
+                get => EditorPrefs.GetInt(_key, DefaultValue);
+                set => EditorPrefs.SetInt(_key, value);
             }
 #endif
             protected override int RuntimeValue
@@ -84,8 +85,8 @@ namespace UnityJigs.Types
 #if UNITY_EDITOR
             protected override bool EditorValue
             {
-                get => UnityEditor.EditorPrefs.GetBool(_key, DefaultValue);
-                set => UnityEditor.EditorPrefs.SetBool(_key, value);
+                get => EditorPrefs.GetBool(_key, DefaultValue);
+                set => EditorPrefs.SetBool(_key, value);
             }
 #endif
 
@@ -103,8 +104,8 @@ namespace UnityJigs.Types
 #if UNITY_EDITOR
             protected override float EditorValue
             {
-                get => UnityEditor.EditorPrefs.GetFloat(_key, DefaultValue);
-                set => UnityEditor.EditorPrefs.SetFloat(_key, value);
+                get => EditorPrefs.GetFloat(_key, DefaultValue);
+                set => EditorPrefs.SetFloat(_key, value);
             }
 #endif
 

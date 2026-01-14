@@ -1,7 +1,11 @@
 using UnityEditor;
 using UnityEngine;
+using UnityJigs.Types;
+using Color = UnityEngine.Color;
+using Vector2 = UnityEngine.Vector2;
+using Vector3 = UnityEngine.Vector3;
 
-namespace UnityJigs.Editor
+namespace UnityJigs.Editor.AnimationPreview
 {
     /// <summary>
     /// Generic, reusable track UI for editing normalized-time markers.

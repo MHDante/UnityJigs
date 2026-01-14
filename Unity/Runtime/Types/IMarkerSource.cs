@@ -1,4 +1,4 @@
-namespace UnityJigs
+namespace UnityJigs.Types
 {
     /// <summary>
     /// Provides marker data for a <c>MarkerTrackDrawer</c>.

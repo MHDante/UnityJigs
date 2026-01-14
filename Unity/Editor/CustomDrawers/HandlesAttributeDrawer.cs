@@ -13,22 +13,22 @@ namespace UnityJigs.Editor.CustomDrawers
     [UsedImplicitly, DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
     public class HandlesAttributeDrawer : OdinSceneGUIAttributeDrawer<HandlesAttribute>
     {
-        private ValueResolver<Color> colorResolver = null!;
-        private readonly BoxBoundsHandle handleDrawer = new();
+        private ValueResolver<Color> _colorResolver = null!;
+        private readonly BoxBoundsHandle _handleDrawer = new();
 
         protected override void Initialize()
         {
             base.Initialize();
-            colorResolver = ValueResolver.Get(Property, Attribute.Color,Color.black);
+            _colorResolver = ValueResolver.Get(Property, Attribute.Color,Color.black);
             if (Property.Info.TypeOfValue != typeof(Bounds))
                 throw new Exception("Handles attribute can only be place on bounds");
         }
 
         protected override void DrawPropertyLayout(GUIContent label)
         {
-            colorResolver.DrawError();
+            _colorResolver.DrawError();
 
-            GUIHelper.PushColor(colorResolver.GetValue());
+            GUIHelper.PushColor(_colorResolver.GetValue());
             CallNextDrawer(label);
             GUIHelper.PopColor();
         }
@@ -38,18 +38,18 @@ namespace UnityJigs.Editor.CustomDrawers
             var target = Property.SerializationRoot.ValueEntry.WeakSmartValue;
             if (target is not Component c) return;
             if(Attribute.DrawOnlyWhenExpanded && !Property.State.Expanded) return;
-            using var _ = new Handles.DrawingScope(colorResolver.GetValue(), c.gameObject.transform.localToWorldMatrix);
+            using var _ = new Handles.DrawingScope(_colorResolver.GetValue(), c.gameObject.transform.localToWorldMatrix);
             var bounds = Property.TryGetTypedValueEntry<Bounds>().SmartValue;
-            handleDrawer.size = bounds.size;
-            handleDrawer.center = bounds.center;
+            _handleDrawer.size = bounds.size;
+            _handleDrawer.center = bounds.center;
 
             EditorGUI.BeginChangeCheck();
-            handleDrawer.DrawHandle();
+            _handleDrawer.DrawHandle();
 
             if (!EditorGUI.EndChangeCheck()) return;
 
-            bounds.center = handleDrawer.center;
-            bounds.size = handleDrawer.size;
+            bounds.center = _handleDrawer.center;
+            bounds.size = _handleDrawer.size;
             Property.ValueEntry.WeakSmartValue = bounds;
             SceneView.RepaintAll();
         }

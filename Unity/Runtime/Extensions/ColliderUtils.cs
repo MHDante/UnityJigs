@@ -1,6 +1,6 @@
 using System;
-using NorthShore.Player;
 using UnityEngine;
+using UnityJigs.Components;
 
 namespace UnityJigs.Extensions
 {

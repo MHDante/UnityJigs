@@ -4,7 +4,7 @@ using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityJigs.Attributes;
 
-namespace UnityJigs
+namespace UnityJigs.Types
 {
     public class UnparentOnEnable : MonoBehaviour
     {

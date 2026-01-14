@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace NorthShore.Player
+namespace UnityJigs.Components
 {
     public class GizmoDrawer : MonoBehaviour
     {

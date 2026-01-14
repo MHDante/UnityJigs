@@ -1,11 +1,12 @@
 using System;
 using UnityEngine;
+using UnityJigs.Extensions;
 
 namespace UnityJigs.Types
 {
     public class RuntimeScriptableSingleton<T> : ScriptableObject where T : RuntimeScriptableSingleton<T>
     {
-        public static T Instance => Extensions.UnityUtils.GetPreloadedSingleton(ref _Instance);
+        public static T Instance => UnityUtils.GetPreloadedSingleton(ref _Instance);
         private static T _Instance = null!;
 
         protected virtual void OnEnable()

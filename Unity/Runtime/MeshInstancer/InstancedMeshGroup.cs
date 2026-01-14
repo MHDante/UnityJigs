@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 using UnityJigs.Extensions;
 using UnityJigs.Types;
 
-namespace UnityJigs.Components
+namespace UnityJigs.MeshInstancer
 {
     public class InstancedMeshGroup : LoopSystem
     {

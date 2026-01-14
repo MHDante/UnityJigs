@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
@@ -46,7 +47,7 @@ namespace UnityJigs.Extensions
         public static Vector3 WithZ(this Vector3 v, float z) => new(v.x, v.y, z);
         public static Vector3 WithXY(this Vector3 v, Vector2 xy) => new(xy.x, xy.y, v.z);
         public static Vector2 XY(this Vector3 v) => v;
-        public static Vector2 YX(this Vector2 v) => new(v.y, v.x);
+        public static Vector2 Yx(this Vector2 v) => new(v.y, v.x);
         public static Vector2 XZ(this Vector3 v) => new(v.x, v.z);
         public static Vector3 X_Z(this Vector2 v, float y) => new(v.x, y, v.y);
         public static Vector3 X0Z(this Vector2 v) => new(v.x, 0, v.y);
@@ -112,7 +113,7 @@ namespace UnityJigs.Extensions
         {
 #if UNITY_EDITOR
             if (singletonField) return singletonField;
-            var candidate = UnityEditor.PlayerSettings.GetPreloadedAssets().OfType<T>().First();
+            var candidate = PlayerSettings.GetPreloadedAssets().OfType<T>().First();
             if (!candidate) throw new FileNotFoundException("Could Not Find object of type T in Preloaded Assets");
             singletonField = candidate;
 #endif
@@ -244,7 +245,7 @@ namespace UnityJigs.Extensions
         public static void ExitGameOrPlaymode()
         {
 #if UNITY_EDITOR
-            UnityEditor.EditorApplication.ExitPlaymode();
+            EditorApplication.ExitPlaymode();
 #else
             Application.Quit();
 #endif

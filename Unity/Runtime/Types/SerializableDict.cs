@@ -65,7 +65,7 @@ namespace UnityJigs.Types
         }
 
         ICollection<TKey> IDictionary<TKey, TValue>.Keys => _dictionary.Keys;
-        public Dictionary<TKey,TValue>.KeyCollection Keys => _dictionary.Keys;
+        public Dictionary<TKey, TValue>.KeyCollection Keys => _dictionary.Keys;
         ICollection<TValue> IDictionary<TKey, TValue>.Values => _dictionary.Values;
         public Dictionary<TKey, TValue>.ValueCollection Values => _dictionary.Values;
         public int Count => _dictionary.Count;
