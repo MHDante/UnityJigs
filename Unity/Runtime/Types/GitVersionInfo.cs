@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Serialization;
 using Debug = UnityEngine.Debug;
@@ -30,15 +29,16 @@ namespace UnityJigs.Types
         /// </summary>
         public string GetBuildId()
         {
-#if UNITY_EDITOR
-            // Only run git describe once per domain reload
-            if (_CachedBuildId != null) return _CachedBuildId;
-            _CachedBuildId = TryGetGitBuildId();
-            return _CachedBuildId;
-#else
+            if (Application.isEditor)
+            {
+                // Only run git describe once per domain reload
+                if (_CachedBuildId != null) return _CachedBuildId;
+                _CachedBuildId = TryGetGitBuildId();
+                return _CachedBuildId;
+            }
+
             // In build, use the baked data
             return GetStoredBuildId();
-#endif
         }
 
 
@@ -118,7 +118,7 @@ namespace UnityJigs.Types
             BuildDateTimeUtc = buildTimeUtc.ToString("o"); // ISO 8601 format
 
 #if UNITY_EDITOR
-            EditorUtility.SetDirty(this);
+            UnityEditor.EditorUtility.SetDirty(this);
 #endif
         }
     }
