@@ -20,28 +20,11 @@ namespace UnityJigs.Types
         private string Suffix = "";
 
         private TextMeshProUGUI? _text;
-        public TextMeshProUGUI Text => this.GetComponentCached(ref _text);
+        private TextMeshProUGUI Text => this.GetComponentCached(ref _text);
 
+        private void Start() => UpdateBuildId();
 
-        private void Start()
-        {
-            UpdateBuildId();
-        }
-
-        /// <summary>
-        /// Updates the text display with the current build ID.
-        /// Can be called manually if you need to refresh the display.
-        /// </summary>
         [Button]
-        public void UpdateBuildId()
-        {
-            string buildId = GitVersionInfo.Instance.GetBuildId();
-            Text.text = $"{Prefix}{buildId}{Suffix}";
-        }
-
-#if UNITY_EDITOR
-        // Update in editor when values change
-        private void OnValidate() => UpdateBuildId();
-#endif
+        public void UpdateBuildId() => Text.text = $"{Prefix}{GitVersionInfo.Instance.UpdateBuildId()}{Suffix}";
     }
 }

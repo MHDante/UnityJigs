@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.Serialization;
 using Debug = UnityEngine.Debug;
@@ -13,13 +14,9 @@ namespace UnityJigs.Types
     [CreateAssetMenu(fileName = "GitVersionInfo", menuName = "Jigs/Git Version Info")]
     public class GitVersionInfo : RuntimeScriptableSingleton<GitVersionInfo>
     {
-        [FormerlySerializedAs("gitDescribe")] [SerializeField]
-        private string GitDescribe = "";
+        public string GitDescribe = "";
+        public string BuildDateTimeUtc = "";
 
-        [FormerlySerializedAs("buildDateTimeUtc")] [SerializeField]
-        private string BuildDateTimeUtc = "";
-
-        private static string? _CachedBuildId;
 
         /// <summary>
         /// Gets the build ID string. Behavior depends on context:
@@ -27,15 +24,10 @@ namespace UnityJigs.Types
         /// - Editor + git fails: Returns "GIT ERROR - " + last known data
         /// - Build: Returns stored data from this asset
         /// </summary>
-        public string GetBuildId()
+        [Button]
+        public string UpdateBuildId()
         {
-            if (Application.isEditor)
-            {
-                // Only run git describe once per domain reload
-                if (_CachedBuildId != null) return _CachedBuildId;
-                _CachedBuildId = TryGetGitBuildId();
-                return _CachedBuildId;
-            }
+            if (Application.isEditor) return TryGetGitBuildId();
 
             // In build, use the baked data
             return GetStoredBuildId();
@@ -50,6 +42,8 @@ namespace UnityJigs.Types
                 if (!string.IsNullOrEmpty(gitResult))
                 {
                     var now = DateTime.UtcNow;
+                    GitDescribe = gitResult;
+                    BuildDateTimeUtc = now.ToString("o"); // ISO 8601 format
                     return FormatBuildId(gitResult, now);
                 }
             }
@@ -112,14 +106,5 @@ namespace UnityJigs.Types
             return $"{gitDescribe} ({localTime:yyyy-MM-dd HH:mm:ss})";
         }
 
-        public void SetBuildInfo(string gitDescribeOutput, DateTime buildTimeUtc)
-        {
-            GitDescribe = gitDescribeOutput;
-            BuildDateTimeUtc = buildTimeUtc.ToString("o"); // ISO 8601 format
-
-#if UNITY_EDITOR
-            UnityEditor.EditorUtility.SetDirty(this);
-#endif
-        }
     }
 }
