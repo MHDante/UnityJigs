@@ -1,11 +1,11 @@
 using Unity.Cinemachine;
 using UnityEngine;
 
-namespace UnityJigs.Cinemachine.Runtime
+namespace UnityJigs.Cinemachine
 {
     public class ReferenceCam : CinemachineVirtualCameraBase
     {
-        public CinemachineVirtualCameraBase? TargetCamera = null!;
+        public CinemachineVirtualCameraBase? TargetCamera;
 
         public override void InternalUpdateCameraState(Vector3 worldUp, float deltaTime) =>
             TargetCamera?.InternalUpdateCameraState(worldUp, deltaTime);

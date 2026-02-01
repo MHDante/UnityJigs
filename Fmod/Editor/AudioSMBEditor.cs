@@ -7,7 +7,8 @@ using Sirenix.Utilities.Editor;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
-using UnityJigs.Editor;
+using UnityJigs.Editor.AnimationPreview;
+using UnityJigs.Types;
 
 namespace UnityJigs.Fmod.Editor
 {
@@ -21,7 +22,7 @@ namespace UnityJigs.Fmod.Editor
 
         public AnimationPreviewDrawerUtil ClipDrawer = null!;
         private MarkerTrackDrawer _markerTrack = null!;
-        public bool? ScrubState = null;
+        public bool? ScrubState;
 
         public AnimationClip? Clip
         {

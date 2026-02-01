@@ -215,7 +215,7 @@ namespace UnityJigs.Splines
             // Fallback to global nearest if no seeds
             if (tCand.Count == 0)
             {
-                _ = SplineUtility.GetNearestPoint(spline, point, out var nearest, out var tNearest, fineRes, 2);
+                _ = SplineUtility.GetNearestPoint(spline, point, out var nearest, out var tNearest, fineRes);
                 results.Add((nearest, tNearest));
                 return;
             }

@@ -13,7 +13,7 @@ namespace UnityJigs.Fmod
     {
         [Range(0f, 1f)]
         [Tooltip("Normalized time (0–1) at which this event should trigger.")]
-        public float NormalizedTime = 0.0f;
+        public float NormalizedTime;
 
         [Tooltip("FMOD event to trigger at this point in the animation.")]
         public EventReference AudioEvent;

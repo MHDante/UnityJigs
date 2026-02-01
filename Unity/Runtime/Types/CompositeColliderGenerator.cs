@@ -26,11 +26,17 @@ namespace UnityJigs.Types
         [SerializeField] private bool IsTrigger;
         [SerializeField] private PhysicsMaterial? Material;
 
-        [FormerlySerializedAs("_bakedHeight")] [SerializeField, HideInInspector] private float BakedHeight;
-        [FormerlySerializedAs("_bakedPolygons")] [SerializeField, HideInInspector] private List<BakedPolygon> BakedPolygons = new();
+        [FormerlySerializedAs("_bakedHeight")] [SerializeField, HideInInspector]
+        private float BakedHeight;
 
-        [FormerlySerializedAs("_lastHash")] [SerializeField, HideInInspector] private int LastHash;
-        [FormerlySerializedAs("_lastCount")] [SerializeField, HideInInspector] private int LastCount;
+        [FormerlySerializedAs("_bakedPolygons")] [SerializeField, HideInInspector]
+        private List<BakedPolygon> BakedPolygons = new();
+
+        [FormerlySerializedAs("_lastHash")] [SerializeField, HideInInspector]
+        private int LastHash;
+
+        [FormerlySerializedAs("_lastCount")] [SerializeField, HideInInspector]
+        private int LastCount;
 
         private string? _error;
         private bool _runtimeBuilt;
@@ -80,8 +86,7 @@ namespace UnityJigs.Types
 
         private void OnValidate() => ApplyColliderSettings();
 
-        [ShowInInspector,
-         InfoBox("$" + nameof(_error), InfoMessageType.Error,
+        [ShowInInspector, InfoBox("$" + nameof(_error), InfoMessageType.Error,
              VisibleIf = "@!string.IsNullOrEmpty(" + nameof(_error) + ")")]
         private void TryRebuild()
         {
@@ -93,17 +98,20 @@ namespace UnityJigs.Types
 
             try
             {
+                if (!Application.isEditor)
+                {
+                    BakeFromSource();
+                    LastHash = ComputeShapeHash();
+                    LastCount = BakedPolygons.Count;
+                    _error = null;
+                }
+
 #if UNITY_EDITOR
                 var changed = Editor_BakeIfShapeChanged();
                 if (changed)
                     _error = null;
 
                 BuildPreviewColliders();
-#else
-                BakeFromSource();
-                _lastHash = ComputeShapeHash();
-                _lastCount = _bakedPolygons.Count;
-                _error = null;
 #endif
             }
             catch (Exception ex)
@@ -186,15 +194,14 @@ namespace UnityJigs.Types
             if (BakedPolygons.Count == 0)
                 return;
 
-            for (var i = 0; i < BakedPolygons.Count; i++)
+            foreach (var t in BakedPolygons)
             {
                 var mc = MakeCollider(persistent);
                 Colliders.Add(mc);
 
-                var polyArray = BakedPolygons[i].Points;
+                var polyArray = t.Points;
                 using var _1 = ListPool<Vector2>.Get(out var poly);
-                for (var j = 0; j < polyArray.Length; j++)
-                    poly.Add(polyArray[j]);
+                foreach (var t1 in polyArray) poly.Add(t1);
 
                 var mesh = mc.sharedMesh!;
                 CreateConvexPrism(poly, BakedHeight, mesh);
@@ -298,9 +305,8 @@ namespace UnityJigs.Types
             {
                 var hash = 17;
                 hash = hash * 31 + Quantize(height).GetHashCode();
-                for (var i = 0; i < polygon.Count; i++)
+                foreach (var p in polygon)
                 {
-                    var p = polygon[i];
                     hash = hash * 31 + Quantize(p.x).GetHashCode();
                     hash = hash * 31 + Quantize(p.y).GetHashCode();
                 }
