@@ -1,6 +1,8 @@
 using System.IO;
 using Sirenix.OdinInspector;
 using UnityEditor;
+using UnityEditor.PackageManager;
+using UnityEngine;
 using UnityJigs.Editor.Settings;
 using UnityJigs.Types;
 using FilePathAttribute = UnityEditor.FilePathAttribute;
@@ -18,27 +20,37 @@ namespace UnityJigs.Editor.Utilities
 
         private const string ManifestPath = "Packages/manifest.json";
         [Button, HorizontalGroup, MenuItem("Utils/Package/Package Switch To Local")]
-        public static void SwitchToLocal()
-        {
-            var manifestText = File.ReadAllText(ManifestPath);
-            foreach (var (local, remote) in instance.LocalToRemotePackages)
-            {
-                manifestText = manifestText.Replace(remote, local);
-            }
-            File.WriteAllText(ManifestPath, manifestText);
-            AssetDatabase.ImportAsset(ManifestPath);
-        }
+        public static void SwitchToLocal() => Switch("local", (local, remote) => (remote, local));
 
         [Button, HorizontalGroup, MenuItem("Utils/Package/Package Switch To Remote")]
-        public static void SwitchToRemote()
+        public static void SwitchToRemote() => Switch("remote", (local, remote) => (local, remote));
+
+        static void Switch(string target, System.Func<string, string, (string find, string replace)> selector)
         {
+            if (instance.LocalToRemotePackages.Count == 0)
+            {
+                Debug.LogError("No package mappings configured. Set them up in " +
+                    "<a href=\"Preferences/Package Switcher\">Preferences > Package Switcher</a>");
+                SettingsService.OpenUserPreferences("Preferences/Package Switcher");
+                return;
+            }
+
             var manifestText = File.ReadAllText(ManifestPath);
+            var original = manifestText;
             foreach (var (local, remote) in instance.LocalToRemotePackages)
             {
-                manifestText = manifestText.Replace(local, remote);
+                var (find, replace) = selector(local, remote);
+                manifestText = manifestText.Replace(find, replace);
             }
+
+            if (manifestText == original)
+            {
+                Debug.LogWarning($"Packages are already set to {target}.");
+                return;
+            }
+
             File.WriteAllText(ManifestPath, manifestText);
-            AssetDatabase.ImportAsset(ManifestPath);
+            Client.Resolve();
         }
     }
 }
