@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using Sirenix.OdinInspector;
 using UnityEngine;
-using UnityEngine.Serialization;
 using Debug = UnityEngine.Debug;
 
 namespace UnityJigs.Types
@@ -42,9 +41,9 @@ namespace UnityJigs.Types
                 if (!string.IsNullOrEmpty(gitResult))
                 {
                     var now = DateTime.UtcNow;
-                    GitDescribe = gitResult;
+                    GitDescribe = gitResult!;
                     BuildDateTimeUtc = now.ToString("o"); // ISO 8601 format
-                    return FormatBuildId(gitResult, now);
+                    return FormatBuildId(gitResult!, now);
                 }
             }
             catch (Exception e)

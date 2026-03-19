@@ -269,7 +269,7 @@ namespace UnityJigs.Extensions
         {
             var pool = ListPool<TResult>.Get(out list);
             foreach (var item in source)
-                if(item is TResult result)
+                if (item is TResult result)
                     list.Add(result);
             return pool;
         }
@@ -280,9 +280,20 @@ namespace UnityJigs.Extensions
         {
             var pool = ListPool<TResult>.Get(out list);
             foreach (var item in source)
-                if(item is TResult result)
+                if (item is TResult result)
                     list.Add(result);
             return pool;
+        }
+
+
+        public static bool Contains<T>(this ReadOnlySpan<T> span, T value)
+        {
+            foreach (var t in span)
+            {
+                if (EqualityComparer<T>.Default.Equals(t, value)) return true;
+            }
+
+            return false;
         }
     }
 

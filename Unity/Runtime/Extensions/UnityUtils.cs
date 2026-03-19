@@ -178,8 +178,9 @@ namespace UnityJigs.Extensions
             PixelsAtNearPlane(canvas) / PixelsPerUnitAtNearPlane(canvas);
 
         public static float PixelsPerUnitAtDistance(this Canvas canvas, float distanceFromCam) =>
-            canvas.renderMode == RenderMode.WorldSpace ? canvas.PixelsAtNearPlane() :
-                canvas.planeDistance / distanceFromCam * canvas.PixelsPerUnitAtNearPlane();
+            canvas.renderMode == RenderMode.WorldSpace
+                ? canvas.PixelsAtNearPlane()
+                : canvas.planeDistance / distanceFromCam * canvas.PixelsPerUnitAtNearPlane();
 
         public static float UnitScaleAtDistance(this Canvas canvas, float distanceFromCam) =>
             distanceFromCam / canvas.planeDistance;
@@ -307,6 +308,24 @@ namespace UnityJigs.Extensions
         public static T GetComponentCached<T>(this Component c, ref T? field) where T : Component =>
             field ? field : field = c.GetComponent<T>();
 
+        public static Vector3 Average(this IEnumerable<Vector3> source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            
+            var total = Vector3.zero;
+            var ct = 0;
+            foreach (var i in source)
+            {
+                total += i;
+                checked { ++ct; }
+            }
+
+            if (ct > 0)
+                return total / ct;
+            throw new InvalidOperationException("Empty");
+        }
+
+
 #if UNITY_6000_0_OR_NEWER
 
         public static Task LerpTo(this Transform transform, Transform target, float duration,
@@ -331,7 +350,7 @@ namespace UnityJigs.Extensions
                 var t = Mathf.Clamp01((Time.time - start) / duration);
                 transform.position = Vector3.Lerp(startPos, position, t);
                 transform.rotation = Quaternion.Slerp(startRot, rotation, t);
-                if(t >= 1) break;
+                if (t >= 1) break;
                 switch (updateType)
                 {
                     case UpdateTimingFlags.Update:
