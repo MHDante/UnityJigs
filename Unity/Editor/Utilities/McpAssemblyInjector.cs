@@ -7,7 +7,7 @@ using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
 
-namespace UnityJigs.Editor
+namespace UnityJigs.Editor.Utilities
 {
     /// <summary>
     /// Injects package assembly references into the Unity AI Assistant's RunCommand compiler

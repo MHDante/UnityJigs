@@ -19,7 +19,7 @@ namespace UnityJigs.Extensions
 
             var interval = (endTime - startTime) / (sampleArray.Length - 1);
             IntegrateCurve(sampleArray, curve, startTime, interval);
-            var matchingIndex = SampleIntegratedCurve(sampleArray, t!.Value);
+            var matchingIndex = SampleIntegratedCurve(sampleArray, t.Value);
 
             var matchingTimeStamp = startTime + matchingIndex * interval;
             return matchingTimeStamp;

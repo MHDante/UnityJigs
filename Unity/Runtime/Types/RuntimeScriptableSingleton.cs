@@ -11,7 +11,7 @@ namespace UnityJigs.Types
 
         protected virtual void OnEnable()
         {
-            if (!_Instance) _Instance = (T)this;
+            if (!_Instance || _Instance == this) _Instance = (T)this;
             else throw new Exception("Multiple Singletons Initialized");
         }
     }
