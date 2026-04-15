@@ -10,8 +10,15 @@ namespace UnityJigs.Components
         private readonly List<BoxData> _boxDataList = new();
 
         private static GizmoDrawer? _Instance;
-        private static GizmoDrawer Instance => _Instance != null ? _Instance :
-            new GameObject().AddComponent<GizmoDrawer>();
+        private static GizmoDrawer Instance => _Instance != null ? _Instance : MakeObj();
+
+        private static GizmoDrawer MakeObj()
+        {
+            var gizmoDrawer = new GameObject().AddComponent<GizmoDrawer>();
+            gizmoDrawer.name = "GizmoDrawer";
+            gizmoDrawer.gameObject.hideFlags = HideFlags.HideAndDontSave;
+            return gizmoDrawer;
+        }
 
         private void Awake()
         {

@@ -6,10 +6,6 @@ using Debug = UnityEngine.Debug;
 
 namespace UnityJigs.Types
 {
-    /// <summary>
-    /// Stores git version information that gets baked into builds.
-    /// In editor, queries git directly. In builds, uses stored data.
-    /// </summary>
     [CreateAssetMenu(fileName = "GitVersionInfo", menuName = "Jigs/Git Version Info")]
     public class GitVersionInfo : RuntimeScriptableSingleton<GitVersionInfo>
     {
@@ -17,20 +13,8 @@ namespace UnityJigs.Types
         public string BuildDateTimeUtc = "";
 
 
-        /// <summary>
-        /// Gets the build ID string. Behavior depends on context:
-        /// - Editor + git works: Runs git describe and caches result until domain reload
-        /// - Editor + git fails: Returns "GIT ERROR - " + last known data
-        /// - Build: Returns stored data from this asset
-        /// </summary>
         [Button]
-        public string UpdateBuildId()
-        {
-            if (Application.isEditor) return TryGetGitBuildId();
-
-            // In build, use the baked data
-            return GetStoredBuildId();
-        }
+        public string UpdateBuildId() => Application.isEditor ? TryGetGitBuildId() : GetStoredBuildId();
 
 
         private string TryGetGitBuildId()
@@ -41,9 +25,9 @@ namespace UnityJigs.Types
                 if (!string.IsNullOrEmpty(gitResult))
                 {
                     var now = DateTime.UtcNow;
-                    GitDescribe = gitResult!;
+                    GitDescribe = gitResult;
                     BuildDateTimeUtc = now.ToString("o"); // ISO 8601 format
-                    return FormatBuildId(gitResult!, now);
+                    return FormatBuildId(gitResult, now);
                 }
             }
             catch (Exception e)
@@ -56,7 +40,7 @@ namespace UnityJigs.Types
             return $"GIT ERROR - {fallback}";
         }
 
-        private string? RunGitDescribe()
+        private static string? RunGitDescribe()
         {
             var startInfo = new ProcessStartInfo
             {
