@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -18,8 +19,20 @@ namespace UnityJigs.Editor.Utilities
         {
             Debug.Log("GitVersionBuildPreprocessor: Capturing git version info...");
 
-            // Find the GitVersionInfo asset
-            var versionInfo = GitVersionInfo.Instance;
+            // Find the GitVersionInfo asset. Throws (InvalidOperationException /
+            // FileNotFoundException) if no GitVersionInfo is in PlayerSettings'
+            // Preloaded Assets — projects that don't use it shouldn't fail the build.
+            GitVersionInfo versionInfo;
+            try
+            {
+                versionInfo = GitVersionInfo.Instance;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("GitVersionBuildPreprocessor: GitVersionInfo not in Preloaded Assets — " +
+                                 "skipping version capture. " + ex.Message);
+                return;
+            }
 
             if (versionInfo == null)
             {
