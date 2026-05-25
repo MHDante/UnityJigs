@@ -114,6 +114,18 @@ namespace UnityJigs.Editor.Utilities
                 }
             }
 
+            // Beyond the dependency walk, inject every package assembly (asmdef outside Assets/,
+            // non-curated) so RunCommand can reach package editor-tooling assemblies that no Assets/
+            // asmdef depends on — e.g. UnityJigs.Fmod.Editor, UnityJigs.Behaviour.Editor. Unity's own
+            // packages are skipped by curatedPrefixes; Assets/Plugins packages are already seeds.
+            foreach (var kvp in allAssemblies)
+            {
+                if (curatedPrefixes.Any(p => kvp.Key.StartsWith(p))) continue;
+                var pkgAsmdef = CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(kvp.Key);
+                if (string.IsNullOrEmpty(pkgAsmdef) || pkgAsmdef.StartsWith("Assets/")) continue;
+                toInject.Add(kvp.Key);
+            }
+
             // Resolve to DLL paths from loaded assemblies
             var paths = new List<string>();
             foreach (var name in toInject)
