@@ -28,7 +28,12 @@ namespace UnityJigs.Components
 
 
         public static void DrawSphereCast(Vector3 origin, float radius, Vector3 direction, float distance,
-            Color? color = null) =>
+            Color? color = null)
+        {
+            // OnDrawGizmos (which drains these lists) never runs in a player build, so outside the
+            // editor every Draw* call would grow the list forever. Skip accumulation in builds —
+            // this also avoids creating the singleton GameObject there.
+            if (!Application.isEditor) return;
             Instance._capsuleDataList.Add(new CapsuleData
             {
                 Origin = origin,
@@ -37,12 +42,15 @@ namespace UnityJigs.Components
                 Distance = distance,
                 Color = color ?? Color.green
             });
+        }
 
 
         public static void DrawCapsule(Vector3 point1, Vector3 point2, float radius, Color? color = null) =>
             DrawSphereCast(point1, radius, (point2 - point1).normalized, Vector3.Distance(point2, point1), color);
 
-        public static void DrawBox(Vector3 centre, Vector3 size, Quaternion orientation, Color? color = null) =>
+        public static void DrawBox(Vector3 centre, Vector3 size, Quaternion orientation, Color? color = null)
+        {
+            if (!Application.isEditor) return; // see DrawSphereCast
             Instance._boxDataList.Add(new BoxData
             {
                 Centre = centre,
@@ -50,14 +58,18 @@ namespace UnityJigs.Components
                 Orientation = orientation,
                 Color = color ?? Color.green
             });
+        }
 
-        public static void DrawSphere(Vector3 centre, float radius, Color? color = null) =>
+        public static void DrawSphere(Vector3 centre, float radius, Color? color = null)
+        {
+            if (!Application.isEditor) return; // see DrawSphereCast
             Instance._sphereDataList.Add(new()
             {
                 Origin = centre,
                 Radius = radius,
                 Color = color ?? Color.green
             });
+        }
 
         private void OnDrawGizmos()
         {
