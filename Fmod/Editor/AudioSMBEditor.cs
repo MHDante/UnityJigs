@@ -82,6 +82,8 @@ namespace UnityJigs.Fmod.Editor
         }
 
 
+        private static readonly Dictionary<RuntimeAnimatorController, GameObject> PreviewModelCache = new();
+
         private void RefreshContext()
         {
             if (target is not Fmod.AudioSMB) return;
@@ -92,9 +94,11 @@ namespace UnityJigs.Fmod.Editor
             if (contexts == null || contexts.Length == 0)
                 return;
 
+            AnimatorController? hostController = null;
             foreach (var ctx in contexts)
             {
                 if (ctx.animatorController == null) continue;
+                hostController ??= ctx.animatorController;
                 if (ctx.animatorObject is not AnimatorState state) continue;
                 if (state.motion == null) continue;
 
@@ -103,6 +107,46 @@ namespace UnityJigs.Fmod.Editor
 
             if (Clip == null && _clips.Count > 0)
                 Clip = _clips[0];
+
+            // Auto-resolve the preview rig (option A): an Animator using this controller, so generic
+            // clips don't need a manual model drag. Falls back to Unity's default if none is open.
+            if (Clip != null && hostController != null)
+            {
+                var model = ResolvePreviewModel(hostController);
+                if (model != null) ClipDrawer.SetPreviewModel(model);
+            }
+        }
+
+        // Finds a GameObject whose Animator uses the given controller (searching open scenes),
+        // preferring the source prefab so the reference is stable. Cached per controller.
+        private static GameObject? ResolvePreviewModel(RuntimeAnimatorController controller)
+        {
+            if (PreviewModelCache.TryGetValue(controller, out var cached) && cached != null)
+                return cached;
+
+            var animators = UnityEngine.Object.FindObjectsByType<Animator>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var anim in animators)
+            {
+                if (!UsesController(anim, controller)) continue;
+                var src = PrefabUtility.GetCorrespondingObjectFromSource(anim.gameObject);
+                var model = src != null ? src : anim.gameObject;
+                PreviewModelCache[controller] = model;
+                return model;
+            }
+
+            return null;
+        }
+
+        private static bool UsesController(Animator anim, RuntimeAnimatorController controller)
+        {
+            var rac = anim.runtimeAnimatorController;
+            while (rac != null)
+            {
+                if (rac == controller) return true;
+                rac = rac is AnimatorOverrideController ovr ? ovr.runtimeAnimatorController : null;
+            }
+            return false;
         }
 
         private void CollectClipsFromMotion(Motion? motion)

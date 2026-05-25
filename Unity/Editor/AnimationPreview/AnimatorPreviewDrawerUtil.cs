@@ -60,6 +60,11 @@ namespace UnityJigs.Editor.AnimationPreview
 
         private static readonly Func<object, Camera?> GetCamera;
 
+        // AvatarPreviewSelection.SetPreview(animationType, model): selects the preview rig — the same
+        // global, persisted slot Unity's "drag a model" UI writes. Nullable so a future Unity API
+        // change degrades model assignment to a no-op instead of breaking every preview.
+        private static readonly Action<UnityEditor.ModelImporterAnimationType, GameObject>? SetAvatarPreviewModel;
+
         // --- TimeControl constants ---
         private static readonly float KScrubberHeight;
         private static readonly float KPlayButtonWidth;
@@ -156,6 +161,15 @@ namespace UnityJigs.Editor.AnimationPreview
                 .GetField("kScrubberHeight", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) ?? 21f);
             KPlayButtonWidth = (float)(timeControlType
                 .GetField("kPlayButtonWidth", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) ?? 33f);
+
+            // Bind AvatarPreviewSelection.SetPreview defensively (internal API; may move between versions).
+            var selectionType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.AvatarPreviewSelection");
+            var setPreviewMethod = selectionType?.GetMethod("SetPreview", BindingFlags.Public | BindingFlags.Static,
+                null, new[] { typeof(UnityEditor.ModelImporterAnimationType), typeof(GameObject) }, null);
+            SetAvatarPreviewModel = setPreviewMethod != null
+                ? (Action<UnityEditor.ModelImporterAnimationType, GameObject>)Delegate.CreateDelegate(
+                    typeof(Action<UnityEditor.ModelImporterAnimationType, GameObject>), setPreviewMethod)
+                : null;
         }
 
         // ========================================================================
@@ -178,6 +192,25 @@ namespace UnityJigs.Editor.AnimationPreview
                 _clip = value;
                 UnityEditor.Editor.CreateCachedEditor(_clip, AnimationClipEditorType, ref _clipEditor);
             }
+        }
+
+        /// <summary>
+        /// Forces the preview to render on a specific rig instead of relying on Unity's auto-resolution
+        /// (which, for a generic clip with no model on the same asset, otherwise shows the
+        /// "drag a model" placeholder). Writes Unity's AvatarPreviewSelection — the same global,
+        /// persisted slot the manual drag uses — then rebuilds the clip editor so its AvatarPreview
+        /// re-initialises on the chosen rig. No-op if there's no clip or the internal API is missing.
+        /// </summary>
+        public void SetPreviewModel(GameObject? model)
+        {
+            if (model == null || _clip == null || SetAvatarPreviewModel == null) return;
+            var type = _clip.legacy ? UnityEditor.ModelImporterAnimationType.Legacy
+                : _clip.isHumanMotion ? UnityEditor.ModelImporterAnimationType.Human
+                : UnityEditor.ModelImporterAnimationType.Generic;
+            SetAvatarPreviewModel(type, model);
+            if (_clipEditor != null) UnityEngine.Object.DestroyImmediate(_clipEditor);
+            _clipEditor = null;
+            UnityEditor.Editor.CreateCachedEditor(_clip, AnimationClipEditorType, ref _clipEditor);
         }
 
         /// <summary>

@@ -12,16 +12,27 @@ namespace UnityJigs.Fmod.Editor
         {
             if (!EditorUtils.PreviewBanksLoaded) EditorUtils.LoadPreviewBanks();
 
-            var editorEventRef = EventManager.EventFromPath(ev.Path);
+            var editorEventRef = ResolveEventRef(ev);
+            if (editorEventRef == null) return default;
             var eventInstance = EditorUtils.PreviewEvent(editorEventRef, ParamValues);
             return eventInstance;
+        }
+
+        // Resolve by GUID (FMOD's canonical key) first; ev.Path is an editor cache that can be
+        // empty/stale, which made EventFromPath return null and NRE inside EditorUtils.PreviewEvent.
+        private static EditorEventRef? ResolveEventRef(EventReference ev)
+        {
+            var byGuid = EventManager.EventFromGUID(ev.Guid);
+            if (byGuid != null) return byGuid;
+            return string.IsNullOrEmpty(ev.Path) ? null : EventManager.EventFromPath(ev.Path);
         }
 
         public static EventInstance CreatePreviewInstance(EventReference ev)
         {
             if (!EditorUtils.PreviewBanksLoaded) EditorUtils.LoadPreviewBanks();
 
-            var editorEventRef = EventManager.EventFromPath(ev.Path);
+            var editorEventRef = ResolveEventRef(ev);
+            if (editorEventRef == null) return default;
             var eventInstance = CreatePreviewInstance(editorEventRef, ParamValues);
             return eventInstance;
         }
