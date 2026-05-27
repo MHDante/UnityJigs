@@ -145,6 +145,19 @@ namespace UnityJigs.Editor.Utilities
                 }
             }
 
+            // The walk above only reaches asmdef-based assemblies. The precompiled
+            // references the project actually compiles against — the BCL framework
+            // (System.dll, System.Core.dll, netstandard, …) plus precompiled plugin DLLs —
+            // have no asmdef and aren't packages, so nothing above reaches them. RunCommand
+            // compiles against the same world as the game code and needs them (e.g. ISet<>
+            // lives in System.dll, so HashSet<T> won't resolve without it). Mirror them
+            // straight from the compilation graph rather than hand-picking types.
+            var seen = new HashSet<string>(paths);
+            foreach (var kvp in allAssemblies)
+            foreach (var compiledRef in kvp.Value.compiledAssemblyReferences)
+                if (seen.Add(compiledRef))
+                    paths.Add(compiledRef);
+
             return paths;
         }
     }
