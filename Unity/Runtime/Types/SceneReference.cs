@@ -21,6 +21,19 @@ namespace UnityJigs.Types
         [HideInInspector, SerializeField] private string SceneGuid = string.Empty;
         public string Path => ScenePath;
 
+        public SceneReference() { }
+
+        /// <summary>
+        /// Construct directly from a scene GUID and path, e.g. when building a list from an
+        /// editor-side folder scan. The editor-only <c>_scene</c> SceneAsset is resolved lazily
+        /// from <see cref="Path"/> the first time the inspector draws it.
+        /// </summary>
+        public SceneReference(string sceneGuid, string scenePath)
+        {
+            SceneGuid = sceneGuid;
+            ScenePath = scenePath;
+        }
+
         public void OnBeforeSerialize() => UpdatePath();
         public void OnAfterDeserialize() => DeferredUpdatePath();
 
