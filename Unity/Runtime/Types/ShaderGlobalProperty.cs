@@ -79,6 +79,27 @@ namespace UnityJigs.Types
         }
 
         [Serializable]
+        public sealed class Enum<T> : GlobalShaderProp where T : struct, System.Enum
+        {
+            // Int backing field — always serializes cleanly and is what gets pushed to the shader.
+            [SerializeField, HideInInspector] public int IntValue;
+
+            // Enum-typed view drives the inspector dropdown; reads/writes the int backing field.
+            [ShowInInspector, LabelText("@$property.Parent.Label")]
+            public T Value
+            {
+                get => (T)(object)IntValue;
+                set => IntValue = (int)(object)value;
+            }
+
+            public Enum(string propertyName, T defaultValue = default, bool autoApply = true)
+                : base(propertyName, autoApply) => IntValue = (int)(object)defaultValue;
+
+            // Pushed via SetGlobalFloat (unambiguous across Unity versions); small enum ints are exact as float.
+            public override void Apply() => Shader.SetGlobalFloat(PropertyId, IntValue);
+        }
+
+        [Serializable]
         public sealed class Color : GlobalShaderProp
         {
             [LabelText("@$property.Parent.Label")] public UnityEngine.Color Value;

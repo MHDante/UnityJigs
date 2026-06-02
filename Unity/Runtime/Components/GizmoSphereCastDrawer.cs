@@ -9,6 +9,21 @@ namespace UnityJigs.Components
         private readonly List<SphereData> _sphereDataList = new();
         private readonly List<BoxData> _boxDataList = new();
 
+        // Draw* calls accumulate within a frame; OnDrawGizmos renders the batch WITHOUT clearing it,
+        // and the first Draw* of the next frame starts a fresh batch. This keeps the gizmos on screen
+        // while play mode is PAUSED (no Draw* calls arrive, so the last batch is never cleared and keeps
+        // redrawing), and removes the flicker you got from clearing on every gizmo repaint.
+        private bool _drawnSinceLastAdd;
+
+        private void BeginBatchIfDrawn()
+        {
+            if (!_drawnSinceLastAdd) return;
+            _drawnSinceLastAdd = false;
+            _capsuleDataList.Clear();
+            _boxDataList.Clear();
+            _sphereDataList.Clear();
+        }
+
         private static GizmoDrawer? _Instance;
         private static GizmoDrawer Instance => _Instance != null ? _Instance : MakeObj();
 
@@ -34,7 +49,9 @@ namespace UnityJigs.Components
             // editor every Draw* call would grow the list forever. Skip accumulation in builds —
             // this also avoids creating the singleton GameObject there.
             if (!Application.isEditor) return;
-            Instance._capsuleDataList.Add(new CapsuleData
+            var inst = Instance;
+            inst.BeginBatchIfDrawn();
+            inst._capsuleDataList.Add(new CapsuleData
             {
                 Origin = origin,
                 Direction = direction,
@@ -51,7 +68,9 @@ namespace UnityJigs.Components
         public static void DrawBox(Vector3 centre, Vector3 size, Quaternion orientation, Color? color = null)
         {
             if (!Application.isEditor) return; // see DrawSphereCast
-            Instance._boxDataList.Add(new BoxData
+            var inst = Instance;
+            inst.BeginBatchIfDrawn();
+            inst._boxDataList.Add(new BoxData
             {
                 Centre = centre,
                 Size = size,
@@ -63,7 +82,9 @@ namespace UnityJigs.Components
         public static void DrawSphere(Vector3 centre, float radius, Color? color = null)
         {
             if (!Application.isEditor) return; // see DrawSphereCast
-            Instance._sphereDataList.Add(new()
+            var inst = Instance;
+            inst.BeginBatchIfDrawn();
+            inst._sphereDataList.Add(new()
             {
                 Origin = centre,
                 Radius = radius,
@@ -79,7 +100,6 @@ namespace UnityJigs.Components
                 DrawCapsule(data.Origin, data.Direction, data.Radius, data.Distance, data.Color);
                 Gizmos.color = oldColor;
             }
-            _capsuleDataList.Clear();
 
             foreach (var data in _boxDataList)
             {
@@ -91,7 +111,6 @@ namespace UnityJigs.Components
                 Gizmos.color = oldColor;
                 Gizmos.matrix = oldMatrix;
             }
-            _boxDataList.Clear();
 
             foreach (var data in _sphereDataList)
             {
@@ -100,7 +119,10 @@ namespace UnityJigs.Components
                 Gizmos.DrawWireSphere(data.Origin, data.Radius);
                 Gizmos.color = oldColor;
             }
-            _sphereDataList.Clear();
+
+            // Don't clear here — the next Draw* (BeginBatchIfDrawn) starts the fresh batch. Clearing on
+            // draw is what made the wires vanish the instant you paused (Draw* stops, repaints continue).
+            _drawnSinceLastAdd = true;
         }
 
         private void DrawCapsule(Vector3 origin, Vector3 direction, float radius, float distance, Color color)
