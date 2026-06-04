@@ -1,29 +1,18 @@
-using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityJigs.Extensions;
 
 namespace UnityJigs.SMBs
 {
-    // Ticks OnTick repeatedly over a normalized window while a state plays, at most once per EmitInterval.
+    // Ticks OnTick repeatedly over the window while a state plays, at most once per EmitInterval.
     // Overlap-safe: only the primary (non-overlapping) entry ticks, so a blend re-entering the state won't
-    // double-emit. Generic counterpart to TimedEventSMB — fire-many-over-a-window vs fire-once.
-    public abstract class WindowEventSMB : TrackedStateSMB
+    // double-emit. Fire-many-over-a-window (vs TimedEventSMB's fire-once). Window + IsInRange from WindowSMB.
+    public abstract class WindowEventSMB : WindowSMB
     {
-        [MinMaxSlider(0, 1, true)] public Vector2 Window = new(0f, 1f);
-
         [Tooltip("Seconds between ticks while inside the window.")]
         public float EmitInterval = 0.06f;
 
         private float _emitTimer;
-
-        // True while the active state is inside the window (i.e. while ticks are firing). Overlap-safe —
-        // checks every known entry. Same inclusive bounds the tick uses, so this matches when OnTick runs.
-        public bool IsInRange() => AnyState(this, static (smb, info) =>
-        {
-            var t = info.NormalizedTimeClamp01();
-            return t >= smb.Window.x && t <= smb.Window.y;
-        });
 
         protected override void OnEnter(Animator animator, AnimatorStateInfo info, int layer,
             AnimatorControllerPlayable controller, bool isOverlap)
