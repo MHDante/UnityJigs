@@ -47,6 +47,7 @@ namespace UnityJigs.Types
             public override AnimatorControllerParameterType Type => AnimatorControllerParameterType.Int;
             public Int(string name = "") : base(name) { }
             public void Set(int value) => Check(Id)?.SetInteger(Id, value);
+            public int Get() => Check(Id)?.GetInteger(Id) ?? 0;
         }
 
         [Serializable]
@@ -61,7 +62,15 @@ namespace UnityJigs.Types
             public override AnimatorControllerParameterType Type => AnimatorControllerParameterType.Int;
             public Enum(string name = "") : base(name) { }
             public void Set(T value) => Check(Id)?.SetInteger(Id, Cast(value));
+
+            public T Get()
+            {
+                var animator = Check(Id);
+                return animator == null ? default : Cast(animator.GetInteger(Id));
+            }
+
             private static unsafe int Cast(T enumValue) => *(int*)&enumValue;
+            private static unsafe T Cast(int value) => *(T*)&value;
         }
 
         [Serializable]
@@ -78,6 +87,8 @@ namespace UnityJigs.Types
                 if (IsDamped) Check(Id)?.SetFloat(Id, value, DampTime, deltaTime ?? Time.deltaTime);
                 else Check(Id)?.SetFloat(Id, value);
             }
+
+            public float Get() => Check(Id)?.GetFloat(Id) ?? 0f;
         }
 
         [Serializable]
@@ -86,6 +97,7 @@ namespace UnityJigs.Types
             public override AnimatorControllerParameterType Type => AnimatorControllerParameterType.Bool;
             public Bool(string name = "") : base( name) { }
             public void Set(bool value) => Check(Id)?.SetBool(Id, value);
+            public bool Get() => Check(Id)?.GetBool(Id) ?? false;
         }
 
         [Serializable]

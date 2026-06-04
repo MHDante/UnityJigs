@@ -79,7 +79,7 @@ namespace UnityJigs.Types
         }
 
         [Serializable]
-        public sealed class Enum<T> : GlobalShaderProp where T : struct, System.Enum
+        public sealed class Enum<T> : GlobalShaderProp where T : struct, Enum
         {
             // Int backing field — always serializes cleanly and is what gets pushed to the shader.
             [SerializeField, HideInInspector] public int IntValue;

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.OdinInspector.Editor.ValueResolvers;
+using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 using UnityJigs.Attributes;
@@ -35,6 +36,14 @@ namespace UnityJigs.Editor.CustomDrawers
             {
                 animProp.ValueEntry.WeakSmartValue = animator;
             }
+            else if (TryGetStateMachineController(out animatorController))
+            {
+                // SMB context: the parameter lives on a StateMachineBehaviour, which has no Animator
+                // reference. Resolve the controller the SMB asset belongs to so the dropdown still works,
+                // and don't draw the (always-null) Animator field.
+                animator = null;
+                return animatorController;
+            }
             else
             {
                 animProp.Draw();
@@ -49,6 +58,20 @@ namespace UnityJigs.Editor.CustomDrawers
             }
 
             return animatorController;
+        }
+
+        // When the inspected object is a StateMachineBehaviour, the parameter has no Animator to resolve
+        // through. The SMB is a sub-asset of the AnimatorController it lives on, so resolve the controller
+        // directly from the asset path. Returns false for unsaved SMBs (falls back to the manual field).
+        private bool TryGetStateMachineController(out AnimatorController? controller)
+        {
+            controller = null;
+            var targets = _property.Tree.WeakTargets;
+            if (targets.Count == 0 || targets[0] is not StateMachineBehaviour smb) return false;
+            var path = AssetDatabase.GetAssetPath(smb);
+            if (string.IsNullOrEmpty(path)) return false;
+            controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+            return controller != null;
         }
 
 

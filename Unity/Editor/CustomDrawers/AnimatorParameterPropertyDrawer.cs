@@ -87,7 +87,7 @@ namespace UnityJigs.Editor.CustomDrawers
                 if (!canCreate)
                 {
                     AssetDatabase.OpenAsset(animatorController);
-                    Selection.activeObject = animator;
+                    Selection.activeObject = animator != null ? animator : animatorController;
                     return;
                 }
 
