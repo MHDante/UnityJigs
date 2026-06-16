@@ -16,13 +16,24 @@ namespace UnityJigs.Editor.Utilities
     [InitializeOnLoad]
     static class McpAssemblyInjector
     {
+        // Set once the refs have actually been injected this domain; reset by the next domain reload.
+        // Guards against the two hooks below both firing in one domain (which would double-inject + double-log).
+        static bool _injected;
+
         static McpAssemblyInjector()
         {
+            // afterAssemblyReload fires at the end of every domain reload, on the main thread, independent
+            // of focus — unlike delayCall, which is starved while the Editor window is unfocused (e.g.
+            // headless MCP automation): that was the bug, the injected refs weren't re-applied until a click.
+            // delayCall is kept only as a cold-open fallback (the initial editor load may not raise
+            // afterAssemblyReload). The _injected guard makes the work run at most once per domain.
+            AssemblyReloadEvents.afterAssemblyReload += InjectPackageAssemblies;
             EditorApplication.delayCall += InjectPackageAssemblies;
         }
 
         static void InjectPackageAssemblies()
         {
+            if (_injected) return; // already done for this domain (the other hook beat us to it)
             try
             {
                 // Find the RunCommandUtils type in the Unity AI Assistant assembly
@@ -58,6 +69,7 @@ namespace UnityJigs.Editor.Utilities
                 if (packageAssemblyPaths.Count == 0) return;
 
                 addRefsMethod.Invoke(builder, new object[] { packageAssemblyPaths });
+                _injected = true; // success — earlier returns leave it false so a later hook can retry
                 Debug.Log($"[McpAssemblyInjector] Injected {packageAssemblyPaths.Count} package assembly references into RunCommand compiler.");
             }
             catch (Exception e)
