@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace UnityJigs.SceneConstraints
 {
@@ -32,6 +34,15 @@ namespace UnityJigs.SceneConstraints
         /// and the field name via nameof.
         /// </summary>
         void ApplyManagedList<T>(Component owner, string fieldName, IReadOnlyList<T> members) where T : Object;
+
+        /// <summary>
+        /// Like <see cref="ApplyManagedList{T}"/> but for a <c>SerializedDict&lt;TKey,TValue&gt;</c> field whose
+        /// VALUES are the gathered components and whose KEY is derived from each value via
+        /// <paramref name="keySelector"/> (e.g. a light group's enum id). Same deepest-prefab recording +
+        /// deepest→scene ordering. Caller must pre-dedupe by key (a dict can't hold duplicates).
+        /// </summary>
+        void ApplyManagedDict<TKey, TValue>(Component owner, string fieldName, IReadOnlyList<TValue> values,
+            Func<TValue, TKey> keySelector) where TValue : Object;
 
         /// <summary>An invariant that could not be auto-fixed. Logged loudly with <paramref name="context"/>
         /// as the ping target. Does not block the save/play/build.</summary>

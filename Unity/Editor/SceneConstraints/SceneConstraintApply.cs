@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -161,6 +162,91 @@ namespace UnityJigs.Editor.SceneConstraints
             }
             if (changed) so.ApplyModifiedPropertiesWithoutUndo();
             return changed;
+        }
+
+        // --- SerializedDict<TKey,TValue> variant. Same deepest-prefab orchestration as Apply, but writes the
+        //     dict's serialized backing (List<SerializedKvp>{Key,Value}); the key travels with its value. ---
+
+        public static void ApplyDict(Component owner, string fieldName, List<Object> orderedValues,
+            Func<Object, object> keyOf, string when)
+        {
+            var chain = OwnerChainPaths(owner);
+            var depth = new int[orderedValues.Count];
+            var anyScene = false;
+            for (var k = 0; k < orderedValues.Count; k++)
+            {
+                depth[k] = DeepestCommonIndex(chain, orderedValues[k]);
+                if (depth[k] < 0) anyScene = true;
+            }
+
+            for (var j = chain.Count - 1; j >= 0; j--)
+            {
+                var pairs = new List<(Object value, object key)>();
+                for (var k = 0; k < orderedValues.Count; k++)
+                {
+                    if (depth[k] < j) continue;
+                    var mapped = PrefabUtility.GetCorrespondingObjectFromSourceAtPath(orderedValues[k], chain[j]);
+                    if (mapped) pairs.Add((mapped, keyOf(orderedValues[k])));
+                }
+                var ownerInAsset = PrefabUtility.GetCorrespondingObjectFromSourceAtPath(owner, chain[j]) as Component;
+                if (ownerInAsset && WriteDict(ownerInAsset, fieldName, pairs))
+                {
+                    EditorUtility.SetDirty(ownerInAsset);
+                    AssetDatabase.SaveAssetIfDirty(ownerInAsset);
+                    Debug.Log($"[SceneConstraint/{when}] {owner.name}.{fieldName}: {pairs.Count} entries recorded " +
+                              $"in {System.IO.Path.GetFileName(chain[j])}.", owner);
+                }
+            }
+
+            if (chain.Count == 0 || anyScene)
+            {
+                var pairs = new List<(Object value, object key)>(orderedValues.Count);
+                foreach (var v in orderedValues) pairs.Add((v, keyOf(v)));
+                WriteDict(owner, fieldName, pairs);
+            }
+            else RevertInstanceOverride(owner, fieldName);
+        }
+
+        private static bool WriteDict(Object owner, string fieldName, List<(Object value, object key)> pairs)
+        {
+            var so = new SerializedObject(owner);
+            var arr = so.FindProperty(fieldName)?.FindPropertyRelative("SerializedValue");
+            if (arr == null || !arr.isArray)
+            {
+                Debug.LogError($"[SceneConstraint] {owner}: '{fieldName}' is not a SerializedDict.", owner);
+                return false;
+            }
+
+            var changed = arr.arraySize != pairs.Count;
+            arr.arraySize = pairs.Count;
+            for (var i = 0; i < pairs.Count; i++)
+            {
+                var el = arr.GetArrayElementAtIndex(i);
+                var valProp = el.FindPropertyRelative("Value");
+                if (valProp.objectReferenceValue != pairs[i].value)
+                {
+                    valProp.objectReferenceValue = pairs[i].value;
+                    changed = true;
+                }
+                if (SetKey(el.FindPropertyRelative("Key"), pairs[i].key)) changed = true;
+            }
+            if (changed) so.ApplyModifiedPropertiesWithoutUndo();
+            return changed;
+        }
+
+        // Enums serialize as their underlying int (intValue), NOT enumValueIndex — explicit-valued enums differ.
+        private static bool SetKey(SerializedProperty keyProp, object key)
+        {
+            if (keyProp.propertyType == SerializedPropertyType.Enum)
+            {
+                var iv = Convert.ToInt32(key);
+                if (keyProp.intValue == iv) return false;
+                keyProp.intValue = iv;
+                return true;
+            }
+            if (Equals(keyProp.boxedValue, key)) return false;
+            keyProp.boxedValue = key;
+            return true;
         }
     }
 }

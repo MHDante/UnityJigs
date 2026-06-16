@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Build;
@@ -68,6 +69,13 @@ namespace UnityJigs.Editor.SceneConstraints
             {
                 var ordered = SceneConstraintApply.Order(owner, members);
                 SceneConstraintApply.Apply(owner, fieldName, ordered, _when);
+            }
+
+            public void ApplyManagedDict<TKey, TValue>(Component owner, string fieldName,
+                IReadOnlyList<TValue> values, Func<TValue, TKey> keySelector) where TValue : Object
+            {
+                var ordered = SceneConstraintApply.Order(owner, values);
+                SceneConstraintApply.ApplyDict(owner, fieldName, ordered, o => (object)keySelector((TValue)o), _when);
             }
         }
     }
