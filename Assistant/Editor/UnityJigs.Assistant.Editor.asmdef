@@ -1,0 +1,20 @@
+{
+    "name": "UnityJigs.Assistant.Editor",
+    "rootNamespace": "UnityJigs.Assistant.Editor",
+    "references": [
+        "GUID:2aae799fca8f4493ca5058f7a1210dd1"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITYJIGS_ASSISTANT"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
