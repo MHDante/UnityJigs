@@ -51,18 +51,32 @@ namespace UnityJigs.Assistant.Editor
                     return;
                 }
 
-                // Get the Builder property (public static, but on an internal class)
+                // Get the Builder property. NOTE: include NonPublic — it was public static in
+                // com.unity.ai.assistant 2.9 but became `internal static` in 2.13; harden the lookup
+                // so accessibility flips don't silently break the injector again.
                 var builderProp = runCommandUtilsType.GetProperty("Builder",
-                    BindingFlags.Public | BindingFlags.Static);
-                if (builderProp == null) return;
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (builderProp == null)
+                {
+                    AssistantHackGuard.ReportMissing("McpAssemblyInjector", "RunCommandUtils.Builder");
+                    return;
+                }
 
                 var builder = builderProp.GetValue(null);
-                if (builder == null) return;
+                if (builder == null)
+                {
+                    AssistantHackGuard.ReportMissing("McpAssemblyInjector", "RunCommandUtils.Builder (resolved null)");
+                    return;
+                }
 
-                // Get the AddReferences method
+                // Get the AddReferences method (public as of 2.13; NonPublic-tolerant defensively)
                 var addRefsMethod = builder.GetType().GetMethod("AddReferences",
-                    BindingFlags.Public | BindingFlags.Instance);
-                if (addRefsMethod == null) return;
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (addRefsMethod == null)
+                {
+                    AssistantHackGuard.ReportMissing("McpAssemblyInjector", "DynamicAssemblyBuilder.AddReferences");
+                    return;
+                }
 
                 // Collect assembly paths from Packages/ that aren't already covered
                 var packageAssemblyPaths = GetPackageAssemblyPaths();
