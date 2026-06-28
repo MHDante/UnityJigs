@@ -13,15 +13,22 @@ namespace UnityJigs.Assistant.Editor
         {
             [McpDescription("Project-relative path to the .shadergraph file (e.g. 'Assets/Shaders/Toon.shadergraph').", Required = true)]
             public string Path { get; set; } = string.Empty;
+
+            [McpDescription("Also recursively decompile every referenced .shadersubgraph as labelled sections after the main graph (default false). Turn on to see logic embedded in subgraphs.")]
+            public bool DrillSubgraphs { get; set; } = false;
+
+            [McpDescription("Inline a String-mode Custom Function node's HLSL body (default true). File-mode functions always show their .hlsl path.")]
+            public bool ExpandFunctions { get; set; } = true;
         }
 
         [McpTool("Unity.ShaderGraphRead",
             "Decompile a .shadergraph into compact, legible pseudo-shadercode (properties as uniforms, " +
-            "master-stack outputs per stage, the node graph as SSA let-bindings). ~100x fewer tokens than the raw JSON.",
+            "master-stack outputs per stage, the node graph as SSA let-bindings). ~100x fewer tokens than the raw JSON. " +
+            "Custom Function nodes show their HLSL (inline body or .hlsl path); set DrillSubgraphs to expand subgraphs.",
             "Read ShaderGraph", Groups = new[] { "scripting" })]
         public static object Read(ReadParams p)
         {
-            try { return Response.Success($"Decompiled {p.Path}", new { text = ShaderGraphReader.Decompile(p.Path) }); }
+            try { return Response.Success($"Decompiled {p.Path}", new { text = ShaderGraphReader.Decompile(p.Path, p.DrillSubgraphs, p.ExpandFunctions) }); }
             catch (Exception e) { return Response.Error(e.Message); }
         }
 

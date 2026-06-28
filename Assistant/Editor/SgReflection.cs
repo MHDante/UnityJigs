@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using UnityEditor;
 
 namespace UnityJigs.Assistant.Editor
 {
@@ -33,6 +34,16 @@ namespace UnityJigs.Assistant.Editor
         public string Type = "";      // e.g. "SampleTexture2DNode"
         public string Name = "";      // node title (subgraph name for SubGraphNode)
         public string? PropertyRef;   // PropertyNode: referenceName of the property it reads
+
+        // CustomFunctionNode
+        public string? FunctionName;        // m_FunctionName
+        public string? FunctionMode;        // "String" (inline body) or "File"
+        public string? FunctionBody;        // inline HLSL (String mode)
+        public string? FunctionSourcePath;  // resolved .hlsl asset path (File mode)
+
+        // SubGraphNode
+        public string? SubGraphPath;        // resolved .shadersubgraph asset path
+
         public List<SgSlot> Inputs = new();
         public List<SgSlot> Outputs = new();
     }
@@ -159,6 +170,25 @@ namespace UnityJigs.Assistant.Editor
                                 n.PropertyRef = refProp.GetType().GetProperty("referenceName")?.GetValue(refProp)?.ToString();
                         }
                         catch { /* best effort */ }
+                    else if (n.Type == "CustomFunctionNode")
+                        try
+                        {
+                            var nt = node.GetType();
+                            n.FunctionName = nt.GetField("m_FunctionName", Inst)?.GetValue(node)?.ToString();
+                            n.FunctionMode = nt.GetField("m_SourceType", Inst)?.GetValue(node)?.ToString();
+                            n.FunctionBody = nt.GetField("m_FunctionBody", Inst)?.GetValue(node)?.ToString();
+                            var srcGuid = nt.GetField("m_FunctionSource", Inst)?.GetValue(node)?.ToString();
+                            if (n.FunctionMode == "File" && !string.IsNullOrEmpty(srcGuid))
+                                n.FunctionSourcePath = AssetDatabase.GUIDToAssetPath(srcGuid);
+                        }
+                        catch { /* best effort */ }
+                    else if (n.Type == "SubGraphNode")
+                        try
+                        {
+                            var guid = ParseGuid(node.GetType().GetField("m_SerializedSubGraph", Inst)?.GetValue(node)?.ToString());
+                            if (guid != null) n.SubGraphPath = AssetDatabase.GUIDToAssetPath(guid);
+                        }
+                        catch { /* best effort */ }
 
                     var slots = (IList)Activator.CreateInstance(slotListType)!;
                     getSlots.Invoke(node, new object[] { slots });
@@ -240,6 +270,21 @@ namespace UnityJigs.Assistant.Editor
 
         internal const BindingFlags Inst = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         static string Str(object? o) => o?.ToString() ?? "";
+
+        /// SubGraphNode stores its target as a serialized asset ref blob; pull the first 32-hex GUID out of it.
+        static string? ParseGuid(string? s)
+        {
+            if (s == null) return null;
+            for (var k = 0; k + 32 <= s.Length; k++)
+            {
+                var ok = true;
+                for (var j = 0; j < 32; j++)
+                    if (!Uri.IsHexDigit(s[k + j])) { ok = false; break; }
+                if (ok && (k + 32 == s.Length || !Uri.IsHexDigit(s[k + 32])) && (k == 0 || !Uri.IsHexDigit(s[k - 1])))
+                    return s.Substring(k, 32);
+            }
+            return null;
+        }
 
         /// Unity appends a short type-code suffix to slot display names: channel counts like
         /// "RGBA(4)"/"R(1)" and type hints like "Sampler(SS)"/"Predicate(B)"/"Texture(T2)".
