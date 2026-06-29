@@ -287,6 +287,23 @@ namespace UnityJigs.Assistant.Editor
             return S(TAMN.GetProperty("objectId")!.GetValue(node));
         }
 
+        /// Add a KeywordNode bound to an existing blackboard keyword (by reference name). For a Boolean keyword the
+        /// node exposes On/Off input slots + one Out slot and selects between them on the keyword's state; with a
+        /// DynamicBranch keyword the generated HLSL is a runtime UNITY_BRANCH (the ubershader feature toggle).
+        /// Add the keyword first via AddKeyword(). Returns the new node objectId.
+        public string AddKeywordNode(string referenceName)
+        {
+            var kw = GraphKeywords().FirstOrDefault(k =>
+                k.GetType().GetProperty("referenceName")?.GetValue(k)?.ToString() == referenceName);
+            if (kw == null) return $"keyword not found: {referenceName}";
+            var tKN = Type("UnityEditor.ShaderGraph.KeywordNode");
+            var node = Activator.CreateInstance(tKN, nonPublic: true)!;
+            TGraph.GetMethod("AddNode", new[] { TAMN, typeof(bool) })!.Invoke(_graph, new[] { node, (object)true });
+            tKN.GetProperty("keyword", Inst)!.SetValue(node, kw); // setter binds the keyword
+            (tKN.GetMethod("UpdateNode", Inst) ?? tKN.GetMethod("UpdatePorts", Inst))?.Invoke(node, null); // build On/Off/Out slots
+            return S(TAMN.GetProperty("objectId")!.GetValue(node));
+        }
+
         /// Add an output to a subgraph (only valid on a .shadersubgraph) — a slot on its SubGraphOutputNode.
         /// type: Float/Vector2/Vector3/Vector4/Color/Bool/Texture2D.
         public string AddSubGraphOutput(string type)
@@ -530,6 +547,9 @@ namespace UnityJigs.Assistant.Editor
 
         IEnumerable<object> GraphProperties() =>
             TGraph.GetProperty("properties", Inst)?.GetValue(_graph) is IEnumerable e ? e.Cast<object>() : Enumerable.Empty<object>();
+
+        IEnumerable<object> GraphKeywords() =>
+            TGraph.GetProperty("keywords", Inst)?.GetValue(_graph) is IEnumerable e ? e.Cast<object>() : Enumerable.Empty<object>();
 
         object Node(string nodeId)
         {
