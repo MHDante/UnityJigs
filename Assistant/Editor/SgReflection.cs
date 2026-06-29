@@ -33,6 +33,7 @@ namespace UnityJigs.Assistant.Editor
         public string Id = "";        // 32-hex objectId
         public string Type = "";      // e.g. "SampleTexture2DNode"
         public string Name = "";      // node title (subgraph name for SubGraphNode)
+        public float X, Y;            // graph-space position (drawState) — for layout-preserving rebuilds
         public string? PropertyRef;   // PropertyNode: referenceName of the property it reads
 
         // CustomFunctionNode
@@ -162,6 +163,18 @@ namespace UnityJigs.Assistant.Editor
                         Name = Str(pName.GetValue(node)),
                         Type = node.GetType().Name,
                     };
+
+                    try
+                    {
+                        var ds = tAMN.GetProperty("drawState", Inst)?.GetValue(node);
+                        if (ds != null && ds.GetType().GetProperty("position")?.GetValue(ds) is { } pos)
+                        {
+                            var prt = pos.GetType();
+                            n.X = Convert.ToSingle(prt.GetProperty("x")!.GetValue(pos));
+                            n.Y = Convert.ToSingle(prt.GetProperty("y")!.GetValue(pos));
+                        }
+                    }
+                    catch { /* positions are best-effort */ }
 
                     if (n.Type == "PropertyNode")
                         try
