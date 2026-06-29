@@ -492,9 +492,137 @@ namespace UnityJigs.Assistant.Editor
         IEnumerable<object> ActiveTargets() =>
             TGraph.GetProperty("activeTargets", Inst)?.GetValue(_graph) is IEnumerable e ? e.Cast<object>() : Enumerable.Empty<object>();
 
-        void AddGraphInput(object input) =>
-            TGraph.GetMethod("AddGraphInput", new[] { Type("UnityEditor.ShaderGraph.Internal.ShaderInput"), typeof(int) })!
+        void AddGraphInput(object input)
+        {
+            var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
+            TGraph.GetMethod("AddGraphInput", new[] { shaderInputT, typeof(int) })!
                 .Invoke(_graph, new object[] { input, -1 });
+            InsertIntoDefaultCategory(input); // else it won't appear in the blackboard UI (still compiles though)
+        }
+
+        /// Make a graph input (property/keyword) a child of a blackboard category — without this it is invisible
+        /// in the blackboard UI even though it compiles. Uses the first existing category, creating one if none.
+        void InsertIntoDefaultCategory(object input)
+        {
+            var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
+                       ?? new List<object>();
+            var cat = cats.FirstOrDefault();
+            if (cat == null)
+            {
+                var cdT = Type("UnityEditor.ShaderGraph.CategoryData");
+                cat = Activator.CreateInstance(cdT, nonPublic: true)!;
+                TGraph.GetMethod("AddCategory", new[] { cdT })!.Invoke(_graph, new[] { cat });
+            }
+            var guid = cat.GetType().GetProperty("categoryGuid", Inst)?.GetValue(cat) as string;
+            var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
+            TGraph.GetMethod("InsertItemIntoCategory", new[] { typeof(string), shaderInputT, typeof(int) })!
+                .Invoke(_graph, new object[] { guid!, input, -1 });
+        }
+
+        /// Repair: add any property/keyword that isn't in a blackboard category to the default category.
+        /// Fixes graphs whose inputs were authored before category-insertion was wired in. Returns count fixed.
+        public string RecategorizeOrphans()
+        {
+            var inCat = new HashSet<string>();
+            var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>()
+                       ?? Enumerable.Empty<object>();
+            foreach (var c in cats)
+                if (c.GetType().GetProperty("Children", Inst)?.GetValue(c) is IEnumerable children)
+                    foreach (var ch in children)
+                        inCat.Add(S(ch.GetType().GetProperty("objectId", Inst)?.GetValue(ch)));
+
+            int fixedCount = 0;
+            foreach (var inp in GraphProperties().Concat(GraphKeywords()))
+            {
+                var oid = S(inp.GetType().GetProperty("objectId", Inst)?.GetValue(inp));
+                if (inCat.Contains(oid)) continue;
+                InsertIntoDefaultCategory(inp);
+                fixedCount++;
+            }
+            return $"recategorized {fixedCount} orphan input(s)";
+        }
+
+        /// Move a graph input (property/keyword, by reference name) into a NAMED blackboard category, creating the
+        /// category if it doesn't exist. An input lives in exactly one category, so it's removed from its current
+        /// one first. New categories are appended at the end of the blackboard.
+        public string SetCategory(string referenceName, string categoryName)
+        {
+            var input = GraphProperties().Concat(GraphKeywords()).FirstOrDefault(p =>
+                S(p.GetType().GetProperty("referenceName")?.GetValue(p)) == referenceName);
+            if (input == null) return $"input not found: {referenceName}";
+            var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
+            string GuidOf(object cat) => cat.GetType().GetProperty("categoryGuid", Inst)?.GetValue(cat) as string;
+            var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
+                       ?? new List<object>();
+
+            foreach (var c in cats)
+                if ((bool)(c.GetType().GetMethod("IsItemInCategory")?.Invoke(c, new[] { input }) ?? false))
+                    TGraph.GetMethod("RemoveItemFromCategory")!.Invoke(_graph, new object[] { GuidOf(c)!, input });
+
+            var target = cats.FirstOrDefault(c => S(c.GetType().GetProperty("name", Inst)?.GetValue(c)) == categoryName);
+            if (target == null)
+            {
+                var cdT = Type("UnityEditor.ShaderGraph.CategoryData");
+                var ctor = cdT.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .First(c => c.GetParameters().Length == 2);
+                var list = Activator.CreateInstance(ctor.GetParameters()[1].ParameterType);
+                target = ctor.Invoke(new[] { categoryName, list })!;
+                TGraph.GetMethod("AddCategory", new[] { cdT })!.Invoke(_graph, new[] { target });
+            }
+            TGraph.GetMethod("InsertItemIntoCategory", new[] { typeof(string), shaderInputT, typeof(int) })!
+                .Invoke(_graph, new object[] { GuidOf(target)!, input, -1 });
+            return $"{referenceName} -> '{categoryName}'";
+        }
+
+        /// Remove blackboard categories that have no children (tidy-up after reorganizing inputs).
+        public string RemoveEmptyCategories()
+        {
+            var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
+                       ?? new List<object>();
+            int removed = 0;
+            foreach (var c in cats)
+            {
+                var children = c.GetType().GetProperty("Children", Inst)?.GetValue(c) as IEnumerable;
+                if (children != null && children.Cast<object>().Any()) continue;
+                var guid = c.GetType().GetProperty("categoryGuid", Inst)?.GetValue(c) as string;
+                TGraph.GetMethod("RemoveCategory")!.Invoke(_graph, new object[] { guid! });
+                removed++;
+            }
+            return $"removed {removed} empty category/ies";
+        }
+
+        /// Remove a blackboard property (by reference name): deletes any PropertyNodes that reference it (and their
+        /// edges, via RemoveNode), removes it from its category, then removes the graph input. Returns a summary.
+        public string RemoveProperty(string referenceName)
+        {
+            var prop = GraphProperties().FirstOrDefault(p =>
+                S(p.GetType().GetProperty("referenceName")?.GetValue(p)) == referenceName);
+            if (prop == null) return $"property not found: {referenceName}";
+            var propOid = S(prop.GetType().GetProperty("objectId", Inst)?.GetValue(prop));
+
+            int nodesRemoved = 0;
+            var getNode = TGraph.GetMethods()
+                .First(m => m.Name == "GetNodeFromId" && !m.IsGenericMethod && m.GetParameters().Length == 1);
+            foreach (var n in Snapshot().Nodes.Where(n => n.Type == "PropertyNode").ToList())
+            {
+                var node = getNode.Invoke(_graph, new object[] { n.Id });
+                var bound = node!.GetType().GetProperty("property", Inst)?.GetValue(node);
+                if (S(bound?.GetType().GetProperty("objectId", Inst)?.GetValue(bound)) != propOid) continue;
+                TGraph.GetMethod("RemoveNode", new[] { TAMN })!.Invoke(_graph, new[] { node });
+                nodesRemoved++;
+            }
+
+            string GuidOf(object cat) => cat.GetType().GetProperty("categoryGuid", Inst)?.GetValue(cat) as string;
+            var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
+                       ?? new List<object>();
+            foreach (var c in cats)
+                if ((bool)(c.GetType().GetMethod("IsItemInCategory")?.Invoke(c, new[] { prop }) ?? false))
+                    TGraph.GetMethod("RemoveItemFromCategory")!.Invoke(_graph, new object[] { GuidOf(c)!, prop });
+
+            var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
+            TGraph.GetMethod("RemoveGraphInput", new[] { shaderInputT })!.Invoke(_graph, new[] { prop });
+            return $"removed {referenceName} (+{nodesRemoved} PropertyNode(s))";
+        }
 
         static Type EnumType(string name) =>
             Asm.GetType("UnityEditor.ShaderGraph.Internal." + name) ?? EnumTypeAny(name);
