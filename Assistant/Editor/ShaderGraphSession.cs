@@ -513,10 +513,59 @@ namespace UnityJigs.Assistant.Editor
                 cat = Activator.CreateInstance(cdT, nonPublic: true)!;
                 TGraph.GetMethod("AddCategory", new[] { cdT })!.Invoke(_graph, new[] { cat });
             }
+            InsertIntoCategory(cat, input);
+        }
+
+        /// Insert `input` into `cat` exactly once: first PURGES every raw reference to it from ALL categories
+        /// (GraphData.InsertItemIntoCategory appends with no dedup check, and a child can legally appear in only
+        /// one category), then inserts a single ref. This is the dedup-safe primitive all category moves go through.
+        void InsertIntoCategory(object cat, object input)
+        {
+            PurgeFromCategories(input);
             var guid = cat.GetType().GetProperty("categoryGuid", Inst)?.GetValue(cat) as string;
             var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
             TGraph.GetMethod("InsertItemIntoCategory", new[] { typeof(string), shaderInputT, typeof(int) })!
                 .Invoke(_graph, new object[] { guid!, input, -1 });
+        }
+
+        /// Remove EVERY raw child reference to `input` from every category (operates on the raw m_ChildObjectList,
+        /// so it clears pre-existing duplicates that the de-duplicating CategoryData.Children getter would mask).
+        void PurgeFromCategories(object input)
+        {
+            var oid = S(input.GetType().GetProperty("objectId", Inst)?.GetValue(input));
+            var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>()
+                       ?? Enumerable.Empty<object>();
+            foreach (var c in cats)
+            {
+                if (c.GetType().GetField("m_ChildObjectList", Inst)?.GetValue(c) is not IList raw) continue;
+                for (int i = raw.Count - 1; i >= 0; i--)
+                {
+                    var val = raw[i]?.GetType().GetProperty("value", Inst)?.GetValue(raw[i]);
+                    if (S(val?.GetType().GetProperty("objectId", Inst)?.GetValue(val)) == oid) raw.RemoveAt(i);
+                }
+            }
+        }
+
+        /// Repair: collapse duplicate child references within every category's child list (keeps first occurrence).
+        /// Older category ops (insert-without-dedup) appended duplicates that the blackboard renders as repeated rows.
+        public string DedupeCategoryChildren()
+        {
+            int removed = 0;
+            var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>()
+                       ?? Enumerable.Empty<object>();
+            foreach (var c in cats)
+            {
+                if (c.GetType().GetField("m_ChildObjectList", Inst)?.GetValue(c) is not IList raw) continue;
+                var seen = new HashSet<string>();
+                for (int i = 0; i < raw.Count;)
+                {
+                    var val = raw[i]?.GetType().GetProperty("value", Inst)?.GetValue(raw[i]);
+                    var oid = S(val?.GetType().GetProperty("objectId", Inst)?.GetValue(val));
+                    if (!seen.Add(oid)) { raw.RemoveAt(i); removed++; }
+                    else i++;
+                }
+            }
+            return $"removed {removed} duplicate category child ref(s)";
         }
 
         /// Repair: add any property/keyword that isn't in a blackboard category to the default category.
@@ -550,14 +599,8 @@ namespace UnityJigs.Assistant.Editor
             var input = GraphProperties().Concat(GraphKeywords()).FirstOrDefault(p =>
                 S(p.GetType().GetProperty("referenceName")?.GetValue(p)) == referenceName);
             if (input == null) return $"input not found: {referenceName}";
-            var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
-            string GuidOf(object cat) => cat.GetType().GetProperty("categoryGuid", Inst)?.GetValue(cat) as string;
             var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
                        ?? new List<object>();
-
-            foreach (var c in cats)
-                if ((bool)(c.GetType().GetMethod("IsItemInCategory")?.Invoke(c, new[] { input }) ?? false))
-                    TGraph.GetMethod("RemoveItemFromCategory")!.Invoke(_graph, new object[] { GuidOf(c)!, input });
 
             var target = cats.FirstOrDefault(c => S(c.GetType().GetProperty("name", Inst)?.GetValue(c)) == categoryName);
             if (target == null)
@@ -569,12 +612,13 @@ namespace UnityJigs.Assistant.Editor
                 target = ctor.Invoke(new[] { categoryName, list })!;
                 TGraph.GetMethod("AddCategory", new[] { cdT })!.Invoke(_graph, new[] { target });
             }
-            TGraph.GetMethod("InsertItemIntoCategory", new[] { typeof(string), shaderInputT, typeof(int) })!
-                .Invoke(_graph, new object[] { GuidOf(target)!, input, -1 });
+            InsertIntoCategory(target, input); // purges all prior refs first → exactly one child entry
             return $"{referenceName} -> '{categoryName}'";
         }
 
-        /// Remove blackboard categories that have no children (tidy-up after reorganizing inputs).
+        /// Remove empty NAMED categories. Unnamed categories are left alone: ShaderGraph requires an unnamed
+        /// "default" category at index 0 (see EnsureDefaultCategory), and removing it makes the blackboard
+        /// re-synthesize one on open and duplicate every input. (Use this AFTER EnsureDefaultCategory.)
         public string RemoveEmptyCategories()
         {
             var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
@@ -582,13 +626,34 @@ namespace UnityJigs.Assistant.Editor
             int removed = 0;
             foreach (var c in cats)
             {
+                if (string.IsNullOrEmpty(S(c.GetType().GetProperty("name", Inst)?.GetValue(c)))) continue; // keep unnamed/default
                 var children = c.GetType().GetProperty("Children", Inst)?.GetValue(c) as IEnumerable;
                 if (children != null && children.Cast<object>().Any()) continue;
                 var guid = c.GetType().GetProperty("categoryGuid", Inst)?.GetValue(c) as string;
                 TGraph.GetMethod("RemoveCategory")!.Invoke(_graph, new object[] { guid! });
                 removed++;
             }
-            return $"removed {removed} empty category/ies";
+            return $"removed {removed} empty named category/ies";
+        }
+
+        /// Guarantee a single unnamed "default" category at index 0 — ShaderGraph's blackboard REQUIRES this (its
+        /// init + IsInputUncategorized skip index 0 assuming it's the default; if the first category is named, the
+        /// blackboard rebuilds a default at open and sweeps ALL inputs into it → every property duplicates against
+        /// its named category). Creates an empty unnamed default and moves it to index 0 if one isn't already there.
+        public string EnsureDefaultCategory()
+        {
+            var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
+                       ?? new List<object>();
+            bool FirstIsUnnamed() => cats.Count > 0 &&
+                string.IsNullOrEmpty(S(cats[0].GetType().GetProperty("name", Inst)?.GetValue(cats[0])));
+            if (FirstIsUnnamed()) return "default (unnamed) category already at index 0";
+
+            var cdT = Type("UnityEditor.ShaderGraph.CategoryData");
+            var def = cdT.GetMethod("DefaultCategory", BindingFlags.Public | BindingFlags.Static)!
+                .Invoke(null, new object?[] { null })!; // CategoryData with name == "" (empty default)
+            TGraph.GetMethod("AddCategory", new[] { cdT })!.Invoke(_graph, new[] { def });
+            TGraph.GetMethod("MoveCategory", new[] { cdT, typeof(int) })!.Invoke(_graph, new object[] { def, 0 });
+            return "inserted empty default (unnamed) category at index 0";
         }
 
         /// Remove a blackboard property (by reference name): deletes any PropertyNodes that reference it (and their
@@ -622,6 +687,36 @@ namespace UnityJigs.Assistant.Editor
             var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
             TGraph.GetMethod("RemoveGraphInput", new[] { shaderInputT })!.Invoke(_graph, new[] { prop });
             return $"removed {referenceName} (+{nodesRemoved} PropertyNode(s))";
+        }
+
+        /// LAYOUT GOTCHA: a node made via AddPropertyNode/AddNode (or recreated by ImportNodes) with no
+        /// SetNodePosition lands at the origin (0,0) — so they pile up overlapping, with wires shooting across the
+        /// graph. This tidies every PropertyNode currently AT (0,0): it moves each to just LEFT of the node it
+        /// feeds, stacking PropertyNodes that share a consumer in a vertical column. Only touches origin nodes, so
+        /// imported/hand-placed layout is left intact. Run before Save() when you've added property nodes.
+        public string TidyPropertyNodes(float dx = 340f, float dyStep = 90f)
+        {
+            var g = Snapshot();
+            var byId = g.Nodes.ToDictionary(n => n.Id);
+            var outEdges = g.Edges.ToLookup(e => e.FromNode);
+            var groups = new Dictionary<string, List<string>>(); // consumerId -> origin propnode ids
+            foreach (var p in g.Nodes.Where(n => n.Type == "PropertyNode" && n.X == 0 && n.Y == 0))
+            {
+                var consumers = outEdges[p.Id].Select(e => e.ToNode).Where(id => byId.ContainsKey(id)).ToList();
+                if (consumers.Count == 0) continue; // unconnected — leave it
+                var anchor = consumers.OrderBy(id => byId[id].X).ThenBy(id => byId[id].Y).First();
+                if (!groups.TryGetValue(anchor, out var list)) groups[anchor] = list = new List<string>();
+                list.Add(p.Id);
+            }
+            int moved = 0;
+            foreach (var kv in groups)
+            {
+                var c = byId[kv.Key];
+                var list = kv.Value;
+                float startY = c.Y - (list.Count - 1) * dyStep / 2f;
+                for (int i = 0; i < list.Count; i++) { SetNodePosition(list[i], c.X - dx, startY + i * dyStep); moved++; }
+            }
+            return $"tidied {moved} property node(s) at origin";
         }
 
         static Type EnumType(string name) =>
@@ -683,13 +778,37 @@ namespace UnityJigs.Assistant.Editor
 
         /// Persist the current state to disk (canonical MultiJson) and reimport the asset.
         /// Only reimports when the path is a project asset; a scratch/external path is just written.
+        /// Before serializing, NormalizeBlackboard() makes the blackboard valid (see its summary) so a save can
+        /// never persist an ORPHANED input, a missing default category, or duplicate category rows.
         public string Save()
         {
+            NormalizeBlackboard();
             File.WriteAllText(_path, Serialize(_graph));
             var p = _path.Replace('\\', '/');
             if (p.StartsWith("Assets/") || p.StartsWith("Packages/"))
                 AssetDatabase.ImportAsset(_path);
             return $"saved {_path}";
+        }
+
+        /// Make the blackboard CANONICAL (idempotent), mirroring what ShaderGraph's own blackboard does on open:
+        ///   1. DedupeCategoryChildren — collapse repeated child refs (CategoryData.InsertItemIntoCategory appends
+        ///      with no dedup; its m_ChildObjectList desyncs from m_ChildObjectIDSet → duplicate blackboard rows).
+        ///   2. EnsureDefaultCategory — guarantee an unnamed default category at index 0 (ShaderGraph REQUIRES it;
+        ///      if index 0 is a NAMED category the blackboard rebuilds a default on open and sweeps EVERY input into
+        ///      it → mass duplication).
+        ///   3. RecategorizeOrphans — file any input that isn't in a category into the default. THIS IS THE GOTCHA:
+        ///      a property/keyword in graph.properties but in NO category is INVISIBLE on the blackboard (it still
+        ///      compiles). Any op that clears/removes categories (or AddGraphInput without an insert) can orphan
+        ///      inputs; running this guarantees they remain visible.
+        /// Called automatically by Save(); also public so callers can validate mid-edit. No-op when the graph has
+        /// no properties/keywords.
+        public string NormalizeBlackboard()
+        {
+            if (!GraphProperties().Any() && !GraphKeywords().Any()) return "no inputs; nothing to normalize";
+            var dd = DedupeCategoryChildren();
+            EnsureDefaultCategory();
+            var orphans = RecategorizeOrphans();
+            return $"normalized blackboard ({dd}; {orphans})";
         }
 
         // ---------- internals ----------
