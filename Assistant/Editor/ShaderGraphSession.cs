@@ -304,6 +304,27 @@ namespace UnityJigs.Assistant.Editor
             return S(TAMN.GetProperty("objectId")!.GetValue(node));
         }
 
+        /// Set a node-internal SETTING (a non-slot field/property), e.g. PositionNode space=Object,
+        /// NormalVector space, Swizzle masks. Enum members are parsed by name; bool/float/int coerced.
+        /// Calls the node's Update method afterward so slots/codegen refresh. (Slot defaults use SetInput instead.)
+        public string SetNodeMember(string nodeId, string member, string value)
+        {
+            var node = Node(nodeId);
+            var nt = node.GetType();
+            var ft = nt.GetProperty(member, Inst)?.PropertyType
+                ?? nt.GetField("m_" + Cap(member), Inst)?.FieldType
+                ?? nt.GetField(member, Inst)?.FieldType;
+            object coerced = ft == null ? value
+                : ft.IsEnum ? Enum.Parse(ft, value, true)
+                : ft == typeof(bool) ? bool.Parse(value)
+                : ft == typeof(float) ? float.Parse(value, CultureInfo.InvariantCulture)
+                : ft == typeof(int) ? int.Parse(value)
+                : value;
+            if (!SetMember(node, member, coerced)) return $"member '{member}' not found on {nt.Name}";
+            (nt.GetMethod("UpdateNodeAfterDeserialization", Inst) ?? nt.GetMethod("UpdateNode", Inst))?.Invoke(node, null);
+            return $"set {nt.Name}.{member} = {coerced}";
+        }
+
         /// Add an output to a subgraph (only valid on a .shadersubgraph) — a slot on its SubGraphOutputNode.
         /// type: Float/Vector2/Vector3/Vector4/Color/Bool/Texture2D.
         public string AddSubGraphOutput(string type)
