@@ -265,8 +265,11 @@ namespace UnityJigs.Assistant.Editor
             };
             var tSlot = Asm.GetTypes().FirstOrDefault(t => t.Name == slotClass);
             if (tSlot == null) return $"unknown slot type '{type}'";
+            // SlotType members are Input/Output (UnityEditor.Graphing.SlotType — what MaterialSlot ctors take),
+            // NOT InputSlot/OutputSlot (that's the legacy UnityEditor.Graphs.SlotType). EnumTypeAny resolves the
+            // Graphing one out of the ShaderGraph asm, so parse against ITS member names.
             var slotType = Enum.Parse(EnumTypeAny("SlotType"),
-                inout.StartsWith("out", StringComparison.OrdinalIgnoreCase) ? "OutputSlot" : "InputSlot", true);
+                inout.StartsWith("out", StringComparison.OrdinalIgnoreCase) ? "Output" : "Input", true);
             var slot = CreateSlot(tSlot, slotId, name, slotType);
             node.GetType().GetMethod("AddSlot", new[] { TSlot, typeof(bool) })!.Invoke(node, new[] { slot, (object)true });
             return $"added {inout} slot {slotId} '{name}' ({type}) to {nodeId}";
