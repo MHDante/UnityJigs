@@ -100,6 +100,15 @@ namespace UnityJigs.Assistant.Editor
             return $"disconnected {edges.Count} edge(s) into {toNodeId}.{toSlotId}";
         }
 
+        /// GraphData.AddNode's signature differs across ShaderGraph snapshots of the same nominal version
+        /// (with/without a trailing `usePreviewPref` bool) — resolve whichever exists.
+        void GraphAddNode(object node)
+        {
+            var two = TGraph.GetMethod("AddNode", new[] { TAMN, typeof(bool) });
+            if (two != null) { two.Invoke(_graph, new[] { node, (object)true }); return; }
+            TGraph.GetMethod("AddNode", new[] { TAMN })!.Invoke(_graph, new[] { node });
+        }
+
         /// Create a node by its C# class name (e.g. "MultiplyNode" — the read view shows it as "Multiply",
         /// so append "Node"). Returns the new node's objectId; re-Snapshot() to see its slot ids.
         public string AddNode(string typeName)
@@ -109,7 +118,7 @@ namespace UnityJigs.Assistant.Editor
                 (t.Name == typeName || t.Name == typeName + "Node"));
             if (nodeType == null) return $"node type not found: '{typeName}' (use the C# class name, e.g. 'MultiplyNode')";
             var node = Activator.CreateInstance(nodeType, nonPublic: true)!;
-            TGraph.GetMethod("AddNode", new[] { TAMN, typeof(bool) })!.Invoke(_graph, new[] { node, (object)true });
+            GraphAddNode(node);
             return $"added {nodeType.Name} -> id {TAMN.GetProperty("objectId")!.GetValue(node)}";
         }
 
@@ -228,7 +237,7 @@ namespace UnityJigs.Assistant.Editor
             if (asset == null) return $"subgraph asset not found: {subGraphPath}";
             var node = Activator.CreateInstance(tSub, nonPublic: true)!;
             tSub.GetProperty("asset")!.SetValue(node, asset);
-            TGraph.GetMethod("AddNode", new[] { TAMN, typeof(bool) })!.Invoke(_graph, new[] { node, (object)true });
+            GraphAddNode(node);
             return $"added SubGraphNode -> id {TAMN.GetProperty("objectId")!.GetValue(node)} ({subGraphPath})";
         }
 
@@ -284,7 +293,7 @@ namespace UnityJigs.Assistant.Editor
             if (prop == null) return $"property not found: {referenceName}";
             var tPN = Type("UnityEditor.ShaderGraph.PropertyNode");
             var node = Activator.CreateInstance(tPN, nonPublic: true)!;
-            TGraph.GetMethod("AddNode", new[] { TAMN, typeof(bool) })!.Invoke(_graph, new[] { node, (object)true });
+            GraphAddNode(node);
             tPN.GetProperty("property", Inst)!.SetValue(node, prop); // the setter binds the property AND builds the output slot
             (tPN.GetMethod("SetupSlots", Inst) ?? tPN.GetMethod("UpdateNodeAfterDeserialization", Inst))?.Invoke(node, null);
             return S(TAMN.GetProperty("objectId")!.GetValue(node));
@@ -301,7 +310,7 @@ namespace UnityJigs.Assistant.Editor
             if (kw == null) return $"keyword not found: {referenceName}";
             var tKN = Type("UnityEditor.ShaderGraph.KeywordNode");
             var node = Activator.CreateInstance(tKN, nonPublic: true)!;
-            TGraph.GetMethod("AddNode", new[] { TAMN, typeof(bool) })!.Invoke(_graph, new[] { node, (object)true });
+            GraphAddNode(node);
             tKN.GetProperty("keyword", Inst)!.SetValue(node, kw); // setter binds the keyword
             (tKN.GetMethod("UpdateNode", Inst) ?? tKN.GetMethod("UpdatePorts", Inst))?.Invoke(node, null); // build On/Off/Out slots
             return S(TAMN.GetProperty("objectId")!.GetValue(node));
