@@ -145,6 +145,8 @@ namespace UnityJigs.Assistant.Editor
         // ---------- target settings (the master-stack / render-state lever) ----------
 
         /// Set an active-target render setting by property name, on every active target that exposes it.
+        /// Falls through to the target's ACTIVE SUB-TARGET when the target itself lacks the property
+        /// (e.g. keepLightingVariants on UniversalUnlitSubTarget).
         /// Bools: "true"/"false"/"1"/"0". Enums by name. Common: alphaClip, surfaceType (Opaque/Transparent),
         /// renderFace (Front/Back/Both), zWriteControl, zTestMode, alphaMode, castShadows.
         /// NOTE: turning alphaClip OFF is what restores early-Z (removes the forced clip()).
@@ -153,10 +155,18 @@ namespace UnityJigs.Assistant.Editor
             var targets = ActiveTargets().ToList();
             if (targets.Count == 0) return "no active targets on this graph";
             var hits = 0; var detail = "";
-            foreach (var t in targets)
+            foreach (var target in targets)
             {
+                var t = (object)target;
                 var p = t.GetType().GetProperty(property, BindingFlags.Public | BindingFlags.Instance);
-                if (p?.GetSetMethod() == null) continue;
+                if (p?.GetSetMethod() == null)
+                {
+                    var sub = t.GetType().GetProperty("activeSubTarget",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(t);
+                    var sp = sub?.GetType().GetProperty(property, BindingFlags.Public | BindingFlags.Instance);
+                    if (sp?.GetSetMethod() == null) continue;
+                    t = sub!; p = sp;
+                }
                 object parsed;
                 if (p.PropertyType == typeof(bool))
                 {
@@ -176,6 +186,62 @@ namespace UnityJigs.Assistant.Editor
             return hits == 0
                 ? $"no active target has a writable '{property}' (try: alphaClip, surfaceType, renderFace, zWriteControl, zTestMode, alphaMode, castShadows)"
                 : $"target {property}: {detail} ({hits} target(s))";
+        }
+
+        /// Switch the active SUB-target (the Graph Settings "Material" dropdown: Lit/Unlit/Decal/...) on every
+        /// active target that accepts it, then refresh the graph's active master-stack blocks. Name matching is
+        /// affix-tolerant: "Unlit" == "UnlitSubTarget" == "UniversalUnlitSubTarget". Block nodes the new sub-target
+        /// doesn't use stay serialized but inactive — exactly like flipping the dropdown in the UI.
+        public string SetSubTarget(string name)
+        {
+            var targets = ActiveTargets().ToList();
+            if (targets.Count == 0) return "no active targets on this graph";
+            var hits = 0; var detail = "";
+            foreach (var t in targets)
+            {
+                var trySet = t.GetType().GetMethod("TrySetActiveSubTarget",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (trySet == null) continue;
+                var candidates = t.GetType().Assembly.GetTypes()
+                    .Where(x => !x.IsAbstract && x.Name.EndsWith("SubTarget")).ToList();
+                // Exact-name tiers first; the EndsWith tier is a convenience and must be UNIQUE
+                // (e.g. "Unlit" would otherwise happily match UniversalSpriteUnlitSubTarget).
+                var st = candidates.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                         ?? candidates.FirstOrDefault(x => x.Name.Equals(name + "SubTarget", StringComparison.OrdinalIgnoreCase))
+                         ?? candidates.FirstOrDefault(x => x.Name.Equals("Universal" + name + "SubTarget", StringComparison.OrdinalIgnoreCase));
+                if (st == null)
+                {
+                    var suffix = candidates.Where(x => x.Name.EndsWith(name + "SubTarget", StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (suffix.Count > 1)
+                        return $"'{name}' is ambiguous: {string.Join("/", suffix.Select(c => c.Name))}";
+                    st = suffix.FirstOrDefault();
+                }
+                if (st == null)
+                    return $"no sub-target type matching '{name}' in {t.GetType().Assembly.GetName().Name} " +
+                           $"(have: {string.Join("/", candidates.Select(c => c.Name))})";
+                if (trySet.Invoke(t, new object[] { st }) is not true)
+                    return $"TrySetActiveSubTarget({st.Name}) refused on {t.GetType().Name}";
+                hits++;
+                detail = $"{t.GetType().Name} -> {st.Name}";
+            }
+            if (hits == 0) return "no active target exposes TrySetActiveSubTarget";
+            var getBlocks = TGraph.GetMethod("GetActiveBlocksForAllActiveTargets")!;
+            var updateBlocks = TGraph.GetMethod("UpdateActiveBlocks")!;
+            updateBlocks.Invoke(_graph, new[] { getBlocks.Invoke(_graph, null) });
+            return $"sub-target: {detail} ({hits} target(s)); active blocks refreshed";
+        }
+
+        /// Rebuild the ports of every SubGraphNode from its (re)imported subgraph asset, preserving
+        /// connections by slot id. Run this on a CONSUMER graph (then Save) after adding/removing
+        /// inputs or outputs on a subgraph it references — SubGraphNodes bake their slots at creation
+        /// and do not pick up asset changes on deserialize.
+        public string RefreshSubGraphNodes()
+        {
+            var nodes = GetNodes().Where(n => n.GetType().Name == "SubGraphNode").ToList();
+            foreach (var n in nodes)
+                n.GetType().GetMethod("UpdateSlots", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)!
+                    .Invoke(n, null);
+            return $"refreshed {nodes.Count} SubGraphNode(s)";
         }
 
         // ---------- blackboard: properties & keywords ----------
