@@ -403,6 +403,30 @@ namespace UnityJigs.Assistant.Editor
             return $"set {nt.Name}.{member} = {coerced}";
         }
 
+        /// Set a member (field/property, incl. non-public, walking base types) on a blackboard INPUT
+        /// (property/keyword) by reference name — e.g. useCustomSlotLabel + customSlotLabel, which make a
+        /// subgraph property a custom-bound port that BranchOnInputConnection.Input accepts. Enum members
+        /// are parsed by name; bool/float/int coerced.
+        public string SetInputMember(string referenceName, string member, string value)
+        {
+            var input = GraphProperties().Concat(GraphKeywords()).FirstOrDefault(p =>
+                S(p.GetType().GetProperty("referenceName")?.GetValue(p)) == referenceName);
+            if (input == null) return $"input not found: {referenceName}";
+            Type? ft = null;
+            for (var t = input.GetType(); t != null && t != typeof(object) && ft == null; t = t.BaseType)
+                ft = t.GetProperty(member, Inst)?.PropertyType
+                     ?? t.GetField("m_" + Cap(member), Inst)?.FieldType
+                     ?? t.GetField(member, Inst)?.FieldType;
+            object coerced = ft == null ? value
+                : ft.IsEnum ? Enum.Parse(ft, value, true)
+                : ft == typeof(bool) ? bool.Parse(value)
+                : ft == typeof(float) ? float.Parse(value, CultureInfo.InvariantCulture)
+                : ft == typeof(int) ? int.Parse(value)
+                : value;
+            if (!SetMember(input, member, coerced)) return $"member '{member}' not found on {input.GetType().Name}";
+            return $"set {referenceName}.{member} = {coerced}";
+        }
+
         /// Add an output to a subgraph (only valid on a .shadersubgraph) — a slot on its SubGraphOutputNode.
         /// type: Float/Vector2/Vector3/Vector4/Color/Bool/Texture2D.
         public string AddSubGraphOutput(string type)
@@ -958,6 +982,8 @@ EDIT (session — mutate the real model, then Save once):
   s.SetTarget(""alphaClip"", ""false"")            // render-state: alphaClip OFF restores early-Z;
        //  also surfaceType/renderFace/zWriteControl/zTestMode/alphaMode/castShadows
   s.AddProperty(""Float"", ""_Foo"", ""Foo"", ""0.5"")     // Float/Vector2-4/Color/Bool/Texture2D blackboard prop
+  s.SetInputMember(""_Foo"", ""useCustomSlotLabel"", ""true"")  // blackboard-input member; this one (+customSlotLabel)
+       //  makes a subgraph property a custom-bound port that BranchOnInputConnection.Input accepts
   s.AddKeyword(""_FEATURE_ROCK"", ""Rock"", ""DynamicBranch"", ""Boolean"")  // DynamicBranch = 1 variant, uniform branch
   s.AddSubGraphNode(""Assets/.../Toon.shadersubgraph"")   // returns objectId; slots populate from the asset
   s.AddNode(""CustomFunctionNode"");  s.SetCustomFunction(id, ""MyFn"", ""String"", body: ""Out = A;"")
