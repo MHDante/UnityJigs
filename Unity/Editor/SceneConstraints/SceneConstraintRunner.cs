@@ -49,6 +49,10 @@ namespace UnityJigs.Editor.SceneConstraints
         public static void Run(GameObject root, string when)
         {
             if (!root) return;
+            // Never enforce while scripts are compiling/reloading: component queries can
+            // come back empty in that window and a [SceneManaged] list would be "fixed"
+            // to empty — silent data loss on save. Skipping is safe (next save catches up).
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating) return;
             var ctx = new Context(when);
             foreach (var constraint in root.GetComponentsInChildren<ISceneConstraint>(true))
             {
