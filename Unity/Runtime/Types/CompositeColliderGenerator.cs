@@ -181,8 +181,12 @@ namespace UnityJigs.Types
         {
             Colliders.RemoveAll(static it => !it);
 
+            // SafeNull before WhereNotNull: Unity 6's GetComponent returns a marshalled stub for
+            // missing components that passes a C# null check and then throws
+            // MissingComponentException on member access — any collider-less child (e.g. a
+            // shadow-only helper) crashed the rebuild.
             var childColliders = transform.Cast<Transform>()
-                .Select(t => t.GetComponent<MeshCollider>())
+                .Select(t => t.GetComponent<MeshCollider>().SafeNull())
                 .WhereNotNull()
                 .ToList();
 
