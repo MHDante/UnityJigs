@@ -64,6 +64,39 @@ namespace UnityJigs.Assistant.Editor
         public bool Refresh { get; set; } = true;
     }
 
+    /// Which matching entry Unity.LogDetail should render.
+    public enum Occurrences
+    {
+        /// Most recent match — usually the one you just caused.
+        Last,
+
+        First,
+        All
+    }
+
+    /// Parameters for the Unity.LogDetail tool.
+    public record JigsLogDetailParams
+    {
+        [McpDescription("File name or path fragment, e.g. 'SkaterFail.cs'", Required = false)]
+        public string File { get; set; }
+
+        // Nullable on purpose: a non-nullable int with no Default is emitted as a REQUIRED property in the
+        // generated MCP schema, which would force a line number on every call.
+        [McpDescription("Line number, to disambiguate several call sites in one file", Required = false)]
+        public int? Line { get; set; }
+
+        [McpDescription("Case-insensitive substring of the message, as an alternative to File/Line",
+            Required = false)]
+        public string Match { get; set; }
+
+        [McpDescription("Which entry to render when several match", Required = false,
+            Default = Occurrences.Last)]
+        public Occurrences Occurrence { get; set; } = Occurrences.Last;
+
+        [McpDescription("Cap on entries rendered when Occurrence is All", Required = false, Default = 5)]
+        public int Max { get; set; } = 5;
+    }
+
     /// Token-efficient Unity console reader.
     ///
     /// Replaces the stock Unity.GetConsoleLogs / Unity.ReadConsole, both of which return the stack trace
@@ -97,8 +130,8 @@ namespace UnityJigs.Assistant.Editor
         // ---- LogEntries/LogEntry reflection -------------------------------------------------------
 
         static MethodInfo _start, _end, _getCount, _getEntry, _clear, _getTimestamp;
-        static FieldInfo _fMessage, _fFile, _fLine, _fMode, _fCallstackStart;
-        static Type _entryType;
+        static FieldInfo _fMessage, _fFile, _fLine, _fMode, _fCallstackStart, _fColumn, _fInstanceId;
+        static Type _entryType, _modeType;
         static string _reflectionError;
 
         static ConsoleLogsMcpTool()
@@ -130,6 +163,12 @@ namespace UnityJigs.Assistant.Editor
 
                 // The whole point of this tool. Optional so a rename degrades to "keep the whole blob"
                 // rather than breaking the reader outright.
+                ResolveModeMasks();
+
+                // Detail-view extras. Optional: their absence costs a line in Unity.LogDetail, nothing more.
+                _fColumn = _entryType.GetField("column", inst);
+                _fInstanceId = _entryType.GetField("instanceID", inst);
+
                 _fCallstackStart = _entryType.GetField("callstackTextStartUTF16", inst);
                 if (_fCallstackStart == null)
                     Debug.LogError("[Unity.Logs] OUTDATED REFLECTION: LogEntry.callstackTextStartUTF16 is gone. " +
@@ -148,6 +187,12 @@ namespace UnityJigs.Assistant.Editor
             return member;
         }
 
+        /// These reports are built with AppendLine, so on Windows every break is CRLF — and the transport
+        /// JSON-encodes the result, so each one reaches the reader as a literal "\r\n". Collapsing to "\n"
+        /// halves that noise. It can't be removed entirely: the bridge requires the {success, message}
+        /// envelope (returning a bare string fails the call outright), so the escaping is inherent.
+        static string Normalise(string report) => report.Replace("\r\n", "\n");
+
         // ---- Entry model ---------------------------------------------------------------------------
 
         enum Sev
@@ -163,21 +208,67 @@ namespace UnityJigs.Assistant.Editor
             public string Stack; // null when the entry had none
             public string File;
             public int Line;
+            public int Column;
             public int Mode;
+            public int InstanceId; // context object from Debug.Log(msg, obj); 0 when none
+            public int Index; // position in the console, for Unity.LogDetail
             public Sev Severity;
             public string Time; // "18:24:54", or "" when unavailable
         }
 
-        // Verified against Unity 6000.3.16f1: warning mode 8405504 has bit 9, info 8406016 has bit 10.
-        const int ModeError = 1 << 8;
-        const int ModeWarning = 1 << 9;
-        const int ModeLog = 1 << 10;
+        // Severity is a mask test over UnityEditor.ConsoleWindow.Mode, resolved by NAME at load so the bit
+        // positions can move between Unity versions without silently misclassifying everything.
+        //
+        // Do NOT shortcut this to "Error|Warning|Log" base bits: compiler diagnostics don't set one. A CS
+        // warning's mode is ScriptCompileWarning|DontExtractStacktrace (266240 on 6000.3) with no base bit,
+        // so a three-bit test reports every compile warning as Info — which is exactly the bug this replaced.
+        static int _errorMask = 1 | 2 | 16 | 64 | 256 | 2048 | 8192 | 32768 | 65536 | 131072 | 1048576 |
+                                2097152 | 4194304;
+
+        static int _warningMask = 128 | 512 | 4096;
+
+        static readonly string[] ErrorFlagNames =
+        {
+            "Error", "Assert", "Fatal", "AssetImportError", "ScriptingError", "ScriptCompileError",
+            "ScriptingException", "GraphCompileError", "ScriptingAssertion", "StickyError", "ReportBug",
+            "DisplayPreviousErrorInStatusBar", "VisualScriptingError"
+        };
+
+        static readonly string[] WarningFlagNames =
+        {
+            "AssetImportWarning", "ScriptingWarning", "ScriptCompileWarning"
+        };
+
+        static void ResolveModeMasks()
+        {
+            _modeType = typeof(EditorApplication).Assembly
+                .GetType("UnityEditor.ConsoleWindow")
+                ?.GetNestedType("Mode", BindingFlags.Public | BindingFlags.NonPublic);
+            if (_modeType == null) return; // keep the numeric fallbacks
+
+            var error = Accumulate(_modeType, ErrorFlagNames);
+            var warning = Accumulate(_modeType, WarningFlagNames);
+
+            // Only adopt reflected values if both resolved to something; a partial read would be worse
+            // than the fallback.
+            if (error == 0 || warning == 0) return;
+            _errorMask = error;
+            _warningMask = warning;
+        }
+
+        static int Accumulate(Type modeType, string[] names)
+        {
+            var mask = 0;
+            for (var i = 0; i < names.Length; i++)
+                if (Enum.TryParse(modeType, names[i], out var value))
+                    mask |= Convert.ToInt32(value);
+            return mask;
+        }
 
         static Sev SeverityOf(int mode)
         {
-            if ((mode & ModeError) != 0) return Sev.Error;
-            if ((mode & ModeWarning) != 0) return Sev.Warning;
-            if ((mode & ModeLog) != 0) return Sev.Info;
+            if ((mode & _errorMask) != 0) return Sev.Error;
+            if ((mode & _warningMask) != 0) return Sev.Warning;
             return Sev.Info;
         }
 
@@ -248,7 +339,196 @@ namespace UnityJigs.Assistant.Editor
             var dropped = Trim(groups, p.Max);
 
             var report = Render(groups, all, kept.Count, all.Count - newFrom, wasReset, dropped, p);
-            return Response.Success(report);
+
+            return Response.Success(Normalise(report));
+        }
+
+        const string DetailTitle = "Inspect one console entry in full";
+
+        const string DetailDescription =
+            "Full, uncollapsed detail for a single console entry: complete message, complete stack trace, " +
+            "file/line/column, decoded mode flags, and the context object the log was attached to " +
+            "(Debug.Log(msg, obj)).\n\n" +
+            "Use after Unity.Logs when a row isn't enough — Unity.Logs collapses runs, hides stacks on " +
+            "non-errors, and may template a message down to its shared parts.\n\n" +
+            "Address the entry with the same 'file:line' the Unity.Logs row printed. With no arguments it " +
+            "returns the most recent error, or the most recent entry if there are none.\n\n" +
+            "Args:\n" +
+            "    File: file name or path fragment, e.g. 'SkaterFail.cs'.\n" +
+            "    Line: line number, to disambiguate several sites in one file.\n" +
+            "    Match: case-insensitive substring of the message, as an alternative to File/Line.\n" +
+            "    Occurrence: Last (default), First, or All when several entries match.\n" +
+            "    Max: cap on entries rendered when Occurrence is All (default 5).";
+
+        [McpTool("Unity.LogDetail", DetailDescription, DetailTitle, Groups = new[] { "debug", "editor" })]
+        public static object LogDetail(JigsLogDetailParams parameters)
+        {
+            if (_reflectionError != null)
+                return Response.Error($"Unity.LogDetail cannot read the console: {_reflectionError}");
+
+            var p = parameters ?? new JigsLogDetailParams();
+
+            var all = new List<Entry>();
+            try
+            {
+                ReadAll(all);
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Failed reading console entries: {e.Message}");
+            }
+
+            if (all.Count == 0) return Response.Success("(console empty)");
+
+            var matches = new List<Entry>();
+            var line = p.Line.GetValueOrDefault();
+            var addressed = !string.IsNullOrEmpty(p.File) || line > 0 || !string.IsNullOrEmpty(p.Match);
+
+            for (var i = 0; i < all.Count; i++)
+            {
+                var e = all[i];
+                if (!string.IsNullOrEmpty(p.File) &&
+                    e.File.IndexOf(p.File, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (line > 0 && e.Line != line) continue;
+                if (!string.IsNullOrEmpty(p.Match) &&
+                    e.Message.IndexOf(p.Match, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                matches.Add(e);
+            }
+
+            // No address given: the interesting entry is almost always the newest error.
+            if (!addressed)
+            {
+                matches.Clear();
+                for (var i = all.Count - 1; i >= 0; i--)
+                {
+                    if (all[i].Severity != Sev.Error) continue;
+                    matches.Add(all[i]);
+                    break;
+                }
+
+                if (matches.Count == 0) matches.Add(all[all.Count - 1]);
+            }
+
+            if (matches.Count == 0)
+                return Response.Success($"No console entry matched (console holds {all.Count} entries). " +
+                                        "Run Unity.Logs and address the entry with the file:line it printed.");
+
+            var chosen = new List<Entry>();
+            switch (p.Occurrence)
+            {
+                case Occurrences.First:
+                    chosen.Add(matches[0]);
+                    break;
+                case Occurrences.All:
+                    var cap = p.Max > 0 ? p.Max : 5;
+                    for (var i = 0; i < matches.Count && i < cap; i++) chosen.Add(matches[i]);
+                    break;
+                default:
+                    chosen.Add(matches[matches.Count - 1]);
+                    break;
+            }
+
+            var sb = new StringBuilder();
+            if (matches.Count > chosen.Count)
+                sb.Append(matches.Count).Append(" entries matched; showing ").Append(chosen.Count)
+                    .AppendLine(p.Occurrence == Occurrences.All
+                        ? " (raise Max for more)"
+                        : " (Occurrence=All for the rest)");
+            else if (!addressed)
+                sb.AppendLine("(no address given — showing the most recent error)");
+
+            // A single entry gets its whole trace — that's the point of the tool. Several entries would
+            // otherwise multiply a 25-frame trace by N and dwarf what was actually asked for.
+            var maxFrames = chosen.Count > 1 ? 8 : 0;
+
+            for (var i = 0; i < chosen.Count; i++)
+            {
+                if (i > 0) sb.AppendLine();
+                RenderDetail(sb, chosen[i], all.Count, maxFrames);
+            }
+
+            return Response.Success(Normalise(sb.ToString().TrimEnd()));
+        }
+
+        static void RenderDetail(StringBuilder sb, in Entry e, int total, int maxFrames)
+        {
+            sb.Append("entry ").Append(e.Index).Append('/').Append(total - 1).Append(" · ")
+                .Append(e.Severity.ToString().ToUpperInvariant());
+            if (!string.IsNullOrEmpty(e.Time)) sb.Append(" · ").Append(e.Time);
+            sb.AppendLine();
+
+            sb.Append("site: ").Append(string.IsNullOrEmpty(e.File) ? "(no source)" : e.File);
+            if (e.Line > 0) sb.Append(':').Append(e.Line);
+            if (e.Column > 0) sb.Append(" col ").Append(e.Column);
+            sb.AppendLine();
+
+            sb.Append("mode: ").Append(e.Mode).Append(" = ").AppendLine(DescribeMode(e.Mode));
+
+            if (e.InstanceId != 0)
+            {
+                // InstanceIDToObject(int) is deprecated in 6000.3 in favour of EntityIdToObject(EntityId).
+                var obj = EditorUtility.EntityIdToObject((EntityId)e.InstanceId);
+                sb.Append("context: ");
+                if (obj != null) sb.Append(obj.name).Append(" (").Append(obj.GetType().Name).Append(')');
+                else sb.Append("instanceID ").Append(e.InstanceId).Append(" (no longer resolvable)");
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("message:");
+            var lines = e.Message.Split('\n');
+            for (var i = 0; i < lines.Length; i++) sb.Append("  ").AppendLine(lines[i].TrimEnd('\r'));
+
+            if (e.Stack == null)
+            {
+                sb.AppendLine("stack: (none recorded)");
+                return;
+            }
+
+            sb.AppendLine("stack:");
+            var frames = e.Stack.Split('\n');
+            var shown = 0;
+            for (var i = 0; i < frames.Length; i++)
+            {
+                var frame = frames[i].TrimEnd('\r');
+                if (frame.Length == 0) continue;
+                if (maxFrames > 0 && shown >= maxFrames)
+                {
+                    sb.Append("  (+").Append(frames.Length - i)
+                        .AppendLine(" more frames — address this entry alone for the full trace)");
+                    return;
+                }
+
+                sb.Append("  ").AppendLine(frame);
+                shown++;
+            }
+        }
+
+        /// Names the set bits so an odd severity can be diagnosed from the output instead of by re-probing.
+        static string DescribeMode(int mode)
+        {
+            if (_modeType == null) return "0x" + mode.ToString("X");
+
+            var sb = new StringBuilder();
+            var covered = 0;
+            var names = Enum.GetNames(_modeType);
+            for (var i = 0; i < names.Length; i++)
+            {
+                if (!Enum.TryParse(_modeType, names[i], out var boxed)) continue;
+                var bit = Convert.ToInt32(boxed);
+                if (bit == 0 || (mode & bit) != bit) continue;
+                if (sb.Length > 0) sb.Append(" | ");
+                sb.Append(names[i]);
+                covered |= bit;
+            }
+
+            var leftover = mode & ~covered;
+            if (leftover != 0)
+            {
+                if (sb.Length > 0) sb.Append(" | ");
+                sb.Append("0x").Append(leftover.ToString("X")).Append(" (unnamed)");
+            }
+
+            return sb.Length > 0 ? sb.ToString() : "0";
         }
 
         [McpTool("Unity.LogsClear",
@@ -307,7 +587,10 @@ namespace UnityJigs.Assistant.Editor
                         Stack = string.IsNullOrEmpty(stack) ? null : stack,
                         File = (string)_fFile.GetValue(box) ?? "",
                         Line = (int)_fLine.GetValue(box),
+                        Column = _fColumn != null ? (int)_fColumn.GetValue(box) : 0,
                         Mode = mode,
+                        InstanceId = _fInstanceId != null ? (int)_fInstanceId.GetValue(box) : 0,
+                        Index = i,
                         Severity = SeverityOf(mode),
                         Time = ReadTimestamp(i, tsArgs)
                     });
@@ -595,6 +878,14 @@ namespace UnityJigs.Assistant.Editor
             var suffix = 0;
             while (suffix < min - prefix && SameCharAt(distinct, suffix, true)) suffix++;
 
+            // Snap both affixes out to word boundaries. Without this, "State: Skating" vs "State: Stomping"
+            // shares the "S" and the "ing" and you get "State: S…ing / varying: kat | tomp" — technically
+            // reconstructable, useless to read.
+            var sample = distinct[0];
+            while (prefix > 0 && IsWordChar(sample[prefix - 1])) prefix--;
+            while (suffix > 0 && IsWordChar(sample[sample.Length - suffix]) &&
+                   IsWordChar(sample[sample.Length - suffix - 1])) suffix--;
+
             // Only worth it when the shared part genuinely dominates; otherwise listing the messages
             // verbatim is clearer and barely longer.
             var shared = prefix + suffix;
@@ -616,6 +907,8 @@ namespace UnityJigs.Assistant.Editor
             varying = sb.ToString();
             return true;
         }
+
+        static bool IsWordChar(char c) => char.IsLetterOrDigit(c);
 
         static bool SameCharAt(List<string> items, int offset, bool fromEnd)
         {
