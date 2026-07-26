@@ -52,11 +52,21 @@ namespace UnityJigs.Assistant.Editor
         public StackModes Stacks { get; set; } = StackModes.Errors;
 
         [McpDescription("Case-insensitive substring filter applied to messages", Required = false)]
-        public string Filter { get; set; }
+        public string? Filter { get; set; }
 
-        [McpDescription("Max grouped rows to return. Errors and warnings are never dropped.",
+        [McpDescription("Maximum entries to return. Without From, returns the most recent; with From, returns " +
+                        "the first Max entries from that point. If entries are hidden the response says how " +
+                        "many and exactly what to pass to read them.",
             Required = false, Default = 200)]
         public int Max { get; set; } = 200;
+
+        // Nullable so it is optional in the generated schema, and so "not paging" is distinguishable from
+        // "start at entry 0".
+        [McpDescription("Console entry index to start from (0 = oldest), for paging through a long console. " +
+                        "Overrides Since. Indices are positions in the CURRENT console — they shift if the " +
+                        "console is cleared, which the response reports.",
+            Required = false)]
+        public int? From { get; set; }
 
         [McpDescription("Run AssetDatabase.Refresh() first so edits made outside Unity are compiled and their " +
                         "errors visible. Leave on unless you know nothing changed.",
@@ -78,7 +88,7 @@ namespace UnityJigs.Assistant.Editor
     public record JigsLogDetailParams
     {
         [McpDescription("File name or path fragment, e.g. 'SkaterFail.cs'", Required = false)]
-        public string File { get; set; }
+        public string? File { get; set; }
 
         // Nullable on purpose: a non-nullable int with no Default is emitted as a REQUIRED property in the
         // generated MCP schema, which would force a line number on every call.
@@ -87,7 +97,7 @@ namespace UnityJigs.Assistant.Editor
 
         [McpDescription("Case-insensitive substring of the message, as an alternative to File/Line",
             Required = false)]
-        public string Match { get; set; }
+        public string? Match { get; set; }
 
         [McpDescription("Which entry to render when several match", Required = false,
             Default = Occurrences.Last)]
@@ -116,23 +126,44 @@ namespace UnityJigs.Assistant.Editor
             "Unity.ReadConsole: those inline the full stack trace into every message (~90% waste) and " +
             "ignore their own stack-trace flag.\n\n" +
             "Returns a header line (counts by severity, time span, how many entries are new since your last " +
-            "call) followed by one row per run of consecutive entries sharing a call site, each row " +
-            "'SEV file:line xN time'. Runs of the same call site with differing text show the shared " +
-            "template plus the varying parts.\n\n" +
+            "call, and 'gen xxxx'), then one entry per run of IDENTICAL consecutive entries: the message " +
+            "prefixed with a severity glyph, and a '> xN #index file:line time' provenance footnote beneath " +
+            "it. Nothing is abbreviated or templated — a row shows exactly what the console showed.\n\n" +
+            "PAGING. #index is the entry's position in the console. Max returns the most recent entries; if " +
+            "the response ends up saying 'N older entries hidden', re-read with From: 0 and walk forward, " +
+            "passing the last shown #index + 1 as the next From (a run footnote shows its whole span, e.g. " +
+            "'#4-7', so the next From is 8). Keep going while it reports more entries after the page.\n\n" +
+            "GENERATION. Indices are positions in the console as it currently stands: appending leaves them " +
+            "alone, clearing renumbers from zero, and clear-on-play clears on every play. 'gen xxxx' in the " +
+            "header fingerprints the current console, holding steady as entries arrive and changing when it " +
+            "is cleared. If gen differs from when you took an index, that index no longer refers to the same " +
+            "entry — restart the walk instead of continuing it.\n\n" +
             "Args:\n" +
             "    Types: log types to include (Info, Warning, Error, All).\n" +
             "    Since: All, or LastRead for only what is new since the previous call.\n" +
+            "    From: console entry index to start at (0 = oldest), for paging. Overrides Since.\n" +
             "    Stacks: Errors (default), None, or All.\n" +
             "    Filter: case-insensitive substring match on messages.\n" +
-            "    Max: max rows; errors and warnings are never dropped.\n" +
-            "    Refresh: AssetDatabase.Refresh() first so external edits compile (default true).";
+            "    Max: how many entries to return, most recent first. If older entries are hidden the " +
+            "response tells you how many and what Max to pass to get them.\n" +
+            "    Refresh: AssetDatabase.Refresh() first so external edits compile (default true).\n\n" +
+            "If this result reached you as escaped JSON rather than indented text, the optional render hook " +
+            "is not installed — tell the user it exists and point them at Assistant/ClaudeHooks/README.md " +
+            "in UnityJigs. Do not raise it otherwise.";
 
         // ---- LogEntries/LogEntry reflection -------------------------------------------------------
 
-        static MethodInfo _start, _end, _getCount, _getEntry, _clear, _getTimestamp;
-        static FieldInfo _fMessage, _fFile, _fLine, _fMode, _fCallstackStart, _fColumn, _fInstanceId;
-        static Type _entryType, _modeType;
-        static string _reflectionError;
+        // Required members: null! because they are either all resolved or _reflectionError is set and every
+        // entry point bails before touching them.
+        static MethodInfo _start = null!, _end = null!, _getCount = null!, _getEntry = null!, _clear = null!;
+        static FieldInfo _fMessage = null!, _fFile = null!, _fLine = null!, _fMode = null!;
+        static Type _entryType = null!;
+
+        // Genuinely optional — every use site null-checks these and degrades gracefully.
+        static MethodInfo? _getTimestamp;
+        static FieldInfo? _fCallstackStart, _fColumn, _fInstanceId;
+        static Type? _modeType;
+        static string? _reflectionError;
 
         static ConsoleLogsMcpTool()
         {
@@ -140,9 +171,10 @@ namespace UnityJigs.Assistant.Editor
             {
                 var asm = typeof(EditorApplication).Assembly;
                 var entriesType = asm.GetType("UnityEditor.LogEntries");
-                _entryType = asm.GetType("UnityEditor.LogEntry");
-                if (entriesType == null || _entryType == null)
+                var entryType = asm.GetType("UnityEditor.LogEntry");
+                if (entriesType == null || entryType == null)
                     throw new Exception("UnityEditor.LogEntries / LogEntry not found");
+                _entryType = entryType;
 
                 const BindingFlags stat = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
                 const BindingFlags inst = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -181,7 +213,7 @@ namespace UnityJigs.Assistant.Editor
             }
         }
 
-        static T Require<T>(T member, string name) where T : class
+        static T Require<T>(T? member, string name) where T : class
         {
             if (member == null) throw new Exception($"could not resolve {name}");
             return member;
@@ -205,7 +237,7 @@ namespace UnityJigs.Assistant.Editor
         struct Entry
         {
             public string Message; // head only — stack stripped
-            public string Stack; // null when the entry had none
+            public string? Stack; // null when the entry had none
             public string File;
             public int Line;
             public int Column;
@@ -287,6 +319,30 @@ namespace UnityJigs.Assistant.Editor
             return $"{e.File}|{e.Line}|{e.Mode}|{e.Message.Length}|{head}";
         }
 
+        /// Short tag identifying the current console generation, printed in the header as "gen xxxx".
+        ///
+        /// Entry indices (#N, and the From parameter) are positions in the console as it stands. Appending
+        /// never disturbs them, but clearing renumbers everything from zero — and clear-on-play does that on
+        /// every play. Fingerprinting the OLDEST entry gives a value that holds steady while the console
+        /// grows and changes the moment it is cleared, so a caller holding an index from an earlier call can
+        /// tell whether that index still means what it meant.
+        static string Generation(List<Entry> all)
+        {
+            if (all.Count == 0) return "empty";
+
+            // FNV-1a over the oldest entry's fingerprint. Not cryptographic — it only has to change when
+            // the console is rebuilt.
+            var s = Fingerprint(all[0]);
+            var hash = 2166136261u;
+            for (var i = 0; i < s.Length; i++)
+            {
+                hash ^= s[i];
+                hash *= 16777619u;
+            }
+
+            return hash.ToString("x8").Substring(0, 4);
+        }
+
         // ---- Tools ---------------------------------------------------------------------------------
 
         [McpTool("Unity.Logs", Description, Title, Groups = new[] { "debug", "editor" })]
@@ -323,7 +379,13 @@ namespace UnityJigs.Assistant.Editor
             SessionState.SetInt(KeyCount, all.Count);
             SessionState.SetString(KeyFingerprint, all.Count > 0 ? Fingerprint(all[all.Count - 1]) : "");
 
-            var from = p.Since == SinceModes.LastRead ? newFrom : 0;
+            // From is an explicit console position, so it wins over Since.
+            var paging = p.From.HasValue;
+            var from = paging
+                ? Math.Min(Math.Max(p.From!.Value, 0), all.Count)
+                : p.Since == SinceModes.LastRead
+                    ? newFrom
+                    : 0;
 
             var kept = new List<Entry>();
             for (var i = from; i < all.Count; i++)
@@ -336,9 +398,9 @@ namespace UnityJigs.Assistant.Editor
             }
 
             var groups = GroupConsecutive(kept);
-            var dropped = Trim(groups, p.Max);
+            var dropped = Trim(groups, p.Max, paging);
 
-            var report = Render(groups, all, kept.Count, all.Count - newFrom, wasReset, dropped, p);
+            var report = Render(groups, all, kept.Count, all.Count - newFrom, wasReset, dropped, paging, p);
 
             return Response.Success(Normalise(report));
         }
@@ -349,10 +411,17 @@ namespace UnityJigs.Assistant.Editor
             "Full, uncollapsed detail for a single console entry: complete message, complete stack trace, " +
             "file/line/column, decoded mode flags, and the context object the log was attached to " +
             "(Debug.Log(msg, obj)).\n\n" +
-            "Use after Unity.Logs when a row isn't enough — Unity.Logs collapses runs, hides stacks on " +
-            "non-errors, and may template a message down to its shared parts.\n\n" +
+            "Use after Unity.Logs when a row isn't enough — Unity.Logs collapses identical runs and hides " +
+            "stacks on non-errors.\n\n" +
             "Address the entry with the same 'file:line' the Unity.Logs row printed. With no arguments it " +
-            "returns the most recent error, or the most recent entry if there are none.\n\n" +
+            "returns the most recent error, or the most recent entry if there are none. Output matches " +
+            "Unity.Logs: severity glyph, message, then '>' footnotes — '#index file:line col time', the " +
+            "decoded mode flags, and the context object — followed by the stack. The header carries the " +
+            "same 'gen xxxx' console fingerprint, so #index values can be compared across calls.\n\n" +
+            "The context footnote locates the object the log was attached to: its asset path (assets) or " +
+            "full hierarchy path (scene objects), plus 'id N'. That id is the Unity instanceID — resolve it " +
+            "to the live object inside Unity.RunCommand with EditorUtility.EntityIdToObject((EntityId)N) to " +
+            "select, inspect or fix it. The id is valid for this editor session; the paths are not.\n\n" +
             "Args:\n" +
             "    File: file name or path fragment, e.g. 'SkaterFail.cs'.\n" +
             "    Line: line number, to disambiguate several sites in one file.\n" +
@@ -428,63 +497,51 @@ namespace UnityJigs.Assistant.Editor
                     break;
             }
 
+            // Same header shape as Unity.Logs: what you got, then the console generation the #indices
+            // below belong to.
             var sb = new StringBuilder();
+            sb.Append(matches.Count).Append(" matched · showing ").Append(chosen.Count);
             if (matches.Count > chosen.Count)
-                sb.Append(matches.Count).Append(" entries matched; showing ").Append(chosen.Count)
-                    .AppendLine(p.Occurrence == Occurrences.All
-                        ? " (raise Max for more)"
-                        : " (Occurrence=All for the rest)");
-            else if (!addressed)
-                sb.AppendLine("(no address given — showing the most recent error)");
+                sb.Append(p.Occurrence == Occurrences.All ? " · raise Max for more" : " · Occurrence=All for the rest");
+            if (!addressed) sb.Append(" · most recent error");
+            sb.Append(" · gen ").Append(Generation(all));
+            sb.AppendLine();
+            sb.AppendLine();
 
             // A single entry gets its whole trace — that's the point of the tool. Several entries would
             // otherwise multiply a 25-frame trace by N and dwarf what was actually asked for.
             var maxFrames = chosen.Count > 1 ? 8 : 0;
 
-            for (var i = 0; i < chosen.Count; i++)
-            {
-                if (i > 0) sb.AppendLine();
-                RenderDetail(sb, chosen[i], all.Count, maxFrames);
-            }
+            for (var i = 0; i < chosen.Count; i++) RenderDetail(sb, chosen[i], maxFrames);
 
             return Response.Success(Normalise(sb.ToString().TrimEnd()));
         }
 
-        static void RenderDetail(StringBuilder sb, in Entry e, int total, int maxFrames)
+        /// Same shape as a Unity.Logs row — glyph, message, then '>' footnotes — with the extra fields the
+        /// overview omits. The full path is kept here rather than the bare file name: this is the drill-down,
+        /// so completeness beats brevity.
+        static void RenderDetail(StringBuilder sb, in Entry e, int maxFrames)
         {
-            sb.Append("entry ").Append(e.Index).Append('/').Append(total - 1).Append(" · ")
-                .Append(e.Severity.ToString().ToUpperInvariant());
-            if (!string.IsNullOrEmpty(e.Time)) sb.Append(" · ").Append(e.Time);
-            sb.AppendLine();
+            AppendMarked(sb, e.Message, MarkerFor(e.Severity));
 
-            sb.Append("site: ").Append(string.IsNullOrEmpty(e.File) ? "(no source)" : e.File);
+            sb.Append(Continuation).Append("> #").Append(e.Index).Append(' ')
+                .Append(string.IsNullOrEmpty(e.File) ? "(no source)" : e.File);
             if (e.Line > 0) sb.Append(':').Append(e.Line);
             if (e.Column > 0) sb.Append(" col ").Append(e.Column);
+            if (!string.IsNullOrEmpty(e.Time)) sb.Append("  ").Append(e.Time);
             sb.AppendLine();
 
-            sb.Append("mode: ").Append(e.Mode).Append(" = ").AppendLine(DescribeMode(e.Mode));
+            sb.Append(Continuation).Append("> mode ").Append(e.Mode).Append(" = ").AppendLine(DescribeMode(e.Mode));
 
             if (e.InstanceId != 0)
-            {
-                // InstanceIDToObject(int) is deprecated in 6000.3 in favour of EntityIdToObject(EntityId).
-                var obj = EditorUtility.EntityIdToObject((EntityId)e.InstanceId);
-                sb.Append("context: ");
-                if (obj != null) sb.Append(obj.name).Append(" (").Append(obj.GetType().Name).Append(')');
-                else sb.Append("instanceID ").Append(e.InstanceId).Append(" (no longer resolvable)");
-                sb.AppendLine();
-            }
-
-            sb.AppendLine("message:");
-            var lines = e.Message.Split('\n');
-            for (var i = 0; i < lines.Length; i++) sb.Append("  ").AppendLine(lines[i].TrimEnd('\r'));
+                sb.Append(Continuation).Append("> context ").AppendLine(DescribeContext(e.InstanceId));
 
             if (e.Stack == null)
             {
-                sb.AppendLine("stack: (none recorded)");
+                sb.Append(Continuation).AppendLine("> no stack recorded");
+                sb.AppendLine();
                 return;
             }
-
-            sb.AppendLine("stack:");
             var frames = e.Stack.Split('\n');
             var shown = 0;
             for (var i = 0; i < frames.Length; i++)
@@ -493,14 +550,59 @@ namespace UnityJigs.Assistant.Editor
                 if (frame.Length == 0) continue;
                 if (maxFrames > 0 && shown >= maxFrames)
                 {
-                    sb.Append("  (+").Append(frames.Length - i)
+                    sb.Append(Continuation).Append("  (+").Append(frames.Length - i)
                         .AppendLine(" more frames — address this entry alone for the full trace)");
+                    sb.AppendLine();
                     return;
                 }
 
-                sb.Append("  ").AppendLine(frame);
+                sb.Append(Continuation).Append("  ").AppendLine(frame);
                 shown++;
             }
+
+            sb.AppendLine(); // blank line between entries; the caller trims the trailing one
+        }
+
+        /// Describes the object a log was attached to (Debug.Log(msg, obj)) so it can actually be found,
+        /// not just named. Two locators, because they answer different questions:
+        ///   * a readable one — asset path for assets, full hierarchy path for scene objects — which is what
+        ///     you search the project or hierarchy for;
+        ///   * the instanceID, which resolves straight back to the live object inside Unity.RunCommand via
+        ///     EditorUtility.EntityIdToObject((EntityId)id), so it can be selected, inspected or mutated.
+        ///
+        /// The instanceID is session-scoped. GlobalObjectId.GetGlobalObjectIdSlow would survive restarts and
+        /// round-trips exactly (verified), but it is documented-slow and emits a GUID blob — not worth it for
+        /// a locator consumed in the same breath as the log that produced it.
+        static string DescribeContext(int instanceId)
+        {
+            // InstanceIDToObject(int) is deprecated in 6000.3 in favour of EntityIdToObject(EntityId).
+            var obj = EditorUtility.EntityIdToObject((EntityId)instanceId);
+            if (obj == null) return $"id {instanceId} (no longer resolvable — scene closed or object destroyed)";
+
+            var sb = new StringBuilder();
+            sb.Append(obj.name).Append(" (").Append(obj.GetType().Name).Append(')');
+
+            var assetPath = AssetDatabase.GetAssetPath(obj);
+            if (!string.IsNullOrEmpty(assetPath)) sb.Append(" · ").Append(assetPath);
+            else
+            {
+                var t = obj as Transform ?? (obj as GameObject)?.transform ?? (obj as Component)?.transform;
+                if (t != null) sb.Append(" · ").Append(HierarchyPath(t));
+            }
+
+            return sb.Append(" · id ").Append(instanceId).ToString();
+        }
+
+        static string HierarchyPath(Transform t)
+        {
+            var path = t.name;
+            while (t.parent != null)
+            {
+                t = t.parent;
+                path = t.name + "/" + path;
+            }
+
+            return path;
         }
 
         /// Names the set bits so an odd severity can be diagnosed from the output instead of by re-probing.
@@ -564,11 +666,12 @@ namespace UnityJigs.Assistant.Editor
                     args[1] = box;
                     _getEntry.Invoke(null, args);
 
-                    var raw = (string)_fMessage.GetValue(box) ?? "";
+                    var raw = _fMessage.GetValue(box) as string ?? "";
                     if (raw.Length == 0) continue;
 
                     var split = _fCallstackStart != null ? (int)_fCallstackStart.GetValue(box) : 0;
-                    string message, stack;
+                    string message;
+                    string? stack;
                     if (split > 0 && split <= raw.Length)
                     {
                         message = raw.Substring(0, split).TrimEnd('\r', '\n');
@@ -585,7 +688,7 @@ namespace UnityJigs.Assistant.Editor
                     {
                         Message = message,
                         Stack = string.IsNullOrEmpty(stack) ? null : stack,
-                        File = (string)_fFile.GetValue(box) ?? "",
+                        File = _fFile.GetValue(box) as string ?? "",
                         Line = (int)_fLine.GetValue(box),
                         Column = _fColumn != null ? (int)_fColumn.GetValue(box) : 0,
                         Mode = mode,
@@ -613,7 +716,7 @@ namespace UnityJigs.Assistant.Editor
                 args[1] = "";
                 _getTimestamp.Invoke(null, args);
                 var s = args[1] as string;
-                if (string.IsNullOrEmpty(s) || s[0] != '[') return "";
+                if (s == null || s.Length == 0 || s[0] != '[') return "";
                 var close = s.IndexOf(']');
                 return close > 1 ? s.Substring(1, close - 1) : "";
             }
@@ -623,7 +726,7 @@ namespace UnityJigs.Assistant.Editor
             }
         }
 
-        static bool WantsSeverity(LogSeverities[] types, Sev sev)
+        static bool WantsSeverity(LogSeverities[]? types, Sev sev)
         {
             if (types == null || types.Length == 0) return true;
             for (var i = 0; i < types.Length; i++)
@@ -641,41 +744,38 @@ namespace UnityJigs.Assistant.Editor
 
         class Group
         {
-            public string File;
+            public string File = "";
             public int Line;
             public Sev Severity;
+            public string Message = "";
             public int Count;
-            public string FirstTime;
-            public string LastTime;
+            public string? FirstTime;
+            public string? LastTime;
+            public string? Stack; // first stack seen in the run
 
-            // Distinct messages in first-occurrence order, with how many times each fired. The run rule
-            // guarantees a message occupies one contiguous block, so these two lists are a lossless
-            // encoding of the run — "A, B ×3" can only have been A B B B.
-            public readonly List<string> Distinct = new();
-            public readonly List<int> Counts = new();
-
-            public string Stack; // first stack seen in the run
+            // Console entry indices spanned by this run, so paging can name a concrete next From.
+            public int FirstIndex;
+            public int LastIndex;
         }
 
+        /// Collapses only consecutive entries that are IDENTICAL — same call site, same severity, same text.
+        /// A run is therefore always "this exact line, N times in a row", which needs no explaining and
+        /// cannot mislead. Earlier versions grouped by call site and factored differing messages into a
+        /// shared template plus the varying spans; that was lossless but read as if text had been truncated,
+        /// which is worse than printing a few more rows.
         static List<Group> GroupConsecutive(List<Entry> entries)
         {
             var groups = new List<Group>();
-            Group current = null;
-            string previous = null;
+            Group? current = null;
 
             for (var i = 0; i < entries.Count; i++)
             {
                 var e = entries[i];
-                var sameSite = current != null
-                               && current.Line == e.Line
-                               && current.Severity == e.Severity
-                               && current.File == e.File;
-
-                // A single call site can alternate between messages (A B A B). Collapsing that to "×4, two
-                // distinct messages" would erase the cycle, which is usually the whole signal. So a run only
-                // extends on an adjacent repeat or a message not yet seen in the run; a message coming back
-                // after something else intervened means we're interleaving, and the run ends there.
-                var continuesRun = sameSite && (e.Message == previous || !current.Distinct.Contains(e.Message));
+                var continuesRun = current != null
+                                   && current.Line == e.Line
+                                   && current.Severity == e.Severity
+                                   && current.File == e.File
+                                   && current.Message == e.Message;
 
                 if (!continuesRun)
                 {
@@ -684,52 +784,45 @@ namespace UnityJigs.Assistant.Editor
                         File = e.File,
                         Line = e.Line,
                         Severity = e.Severity,
+                        Message = e.Message,
                         FirstTime = e.Time,
-                        Stack = e.Stack
+                        Stack = e.Stack,
+                        FirstIndex = e.Index
                     };
                     groups.Add(current);
                 }
 
-                current.Count++;
-                current.LastTime = e.Time;
-                current.Stack ??= e.Stack;
-
-                if (e.Message == previous && current.Counts.Count > 0) current.Counts[current.Counts.Count - 1]++;
-                else
-                {
-                    current.Distinct.Add(e.Message);
-                    current.Counts.Add(1);
-                }
-
-                previous = e.Message;
+                var group = current!;
+                group.Count++;
+                group.LastTime = e.Time;
+                group.Stack ??= e.Stack;
+                group.LastIndex = e.Index;
             }
 
             return groups;
         }
 
-        /// Drops the oldest Info groups when over budget. Errors and warnings are never dropped — they are
-        /// the reason to read the console at all.
-        static int Trim(List<Group> groups, int max)
+        /// Caps the result, dropping wholesale regardless of severity. An earlier version spared warnings and
+        /// errors, which meant a console that was mostly warnings could not be trimmed at all and blew
+        /// straight through the cap. Telling the reader what was hidden and how to fetch it beats quietly
+        /// deciding which severities deserve the budget.
+        ///
+        /// Direction follows intent: with no From the interesting end is the most recent, so older rows go;
+        /// when paging forward from From, the interesting end is the start of the page, so later rows go.
+        static int Trim(List<Group> groups, int max, bool paging)
         {
             if (max <= 0 || groups.Count <= max) return 0;
 
-            var over = groups.Count - max;
-            var dropped = 0;
-            for (var i = 0; i < groups.Count && dropped < over; i++)
-            {
-                if (groups[i].Severity != Sev.Info) continue;
-                groups.RemoveAt(i);
-                i--;
-                dropped++;
-            }
-
+            var dropped = groups.Count - max;
+            if (paging) groups.RemoveRange(max, dropped);
+            else groups.RemoveRange(0, dropped);
             return dropped;
         }
 
         // ---- Rendering -----------------------------------------------------------------------------
 
         static string Render(List<Group> groups, List<Entry> all, int keptCount, int newCount,
-            bool wasReset, int dropped, JigsLogsParams p)
+            bool wasReset, int dropped, bool paging, JigsLogsParams p)
         {
             int err = 0, warn = 0, info = 0;
             for (var i = 0; i < all.Count; i++)
@@ -760,7 +853,7 @@ namespace UnityJigs.Assistant.Editor
             var span = TimeSpanOf(all);
             if (span != null) sb.Append(" · ").Append(span);
             if (wasReset) sb.Append(" · console was cleared since last read");
-            if (dropped > 0) sb.Append(" · ").Append(dropped).Append(" oldest info rows dropped (raise Max)");
+            sb.Append(" · gen ").Append(Generation(all));
             sb.AppendLine();
 
             if (groups.Count == 0)
@@ -771,13 +864,19 @@ namespace UnityJigs.Assistant.Editor
                 return sb.ToString();
             }
 
+            // State the horizon; how to cross it is in the tool description, not repeated every call.
+            if (dropped > 0)
+                sb.Append("… ").Append(dropped)
+                    .AppendLine(paging ? " more entries after this page." : " older entries hidden.");
+
+            sb.AppendLine(); // separate the summary from the entries
             for (var i = 0; i < groups.Count; i++) RenderGroup(sb, groups[i], p);
             return sb.ToString().TrimEnd();
         }
 
-        static string TimeSpanOf(List<Entry> all)
+        static string? TimeSpanOf(List<Entry> all)
         {
-            string first = null, last = null;
+            string? first = null, last = null;
             for (var i = 0; i < all.Count; i++)
             {
                 if (string.IsNullOrEmpty(all[i].Time)) continue;
@@ -789,18 +888,21 @@ namespace UnityJigs.Assistant.Editor
             return first == last ? first : first + "–" + last;
         }
 
+        /// Body first, provenance second: the message is what you read, so the call site and timing sit
+        /// under it as a quoted footnote rather than pushing it down the page. Severity is carried by the
+        /// glyph alone — an "ERR"/"WARN"/"INFO" word next to it would say the same thing twice.
         static void RenderGroup(StringBuilder sb, Group g, JigsLogsParams p)
         {
-            sb.Append(g.Severity switch
-            {
-                Sev.Error => "ERR  ",
-                Sev.Warning => "WARN ",
-                _ => "INFO "
-            });
+            AppendMarked(sb, g.Message, MarkerFor(g.Severity));
 
-            sb.Append(FileName(g.File));
+            // Provenance footnote: repeat count first, since "how many times" is the thing you scan for,
+            // then the console entry number(s) — a run shows its span, so the next From is readable off it.
+            sb.Append(Continuation).Append("> ");
+            if (g.Count > 1) sb.Append('×').Append(g.Count).Append(' ');
+            sb.Append('#').Append(g.FirstIndex);
+            if (g.LastIndex != g.FirstIndex) sb.Append('–').Append(g.LastIndex);
+            sb.Append(' ').Append(FileName(g.File));
             if (g.Line > 0) sb.Append(':').Append(g.Line);
-            if (g.Count > 1) sb.Append(" ×").Append(g.Count);
 
             if (!string.IsNullOrEmpty(g.FirstTime))
             {
@@ -810,24 +912,6 @@ namespace UnityJigs.Assistant.Editor
 
             sb.AppendLine();
 
-            if (g.Distinct.Count == 1)
-            {
-                // The header's ×N already states the count.
-                AppendIndented(sb, g.Distinct[0], 1);
-            }
-            else if (TryTemplate(g.Distinct, g.Counts, out var template, out var varying))
-            {
-                AppendIndented(sb, template, 1);
-                sb.Append("     varying: ").AppendLine(varying);
-            }
-            else
-            {
-                var show = Math.Min(g.Distinct.Count, 8);
-                for (var i = 0; i < show; i++) AppendIndented(sb, g.Distinct[i], g.Counts[i]);
-                if (g.Distinct.Count > show)
-                    sb.Append("     + ").Append(g.Distinct.Count - show).AppendLine(" more distinct messages");
-            }
-
             var wantStack = p.Stacks == StackModes.All ||
                             (p.Stacks == StackModes.Errors && g.Severity == Sev.Error);
             if (wantStack && g.Stack != null)
@@ -836,20 +920,31 @@ namespace UnityJigs.Assistant.Editor
                 for (var i = 0; i < lines.Length; i++)
                 {
                     var line = lines[i].TrimEnd('\r');
-                    if (line.Length > 0) sb.Append("       ").AppendLine(line);
+                    if (line.Length > 0) sb.Append(Continuation).Append("  ").AppendLine(line);
                 }
             }
+
+            // Blank line between entries. Render() trims the trailing one.
+            sb.AppendLine();
         }
 
-        static void AppendIndented(StringBuilder sb, string message, int count)
+        /// Message lines lead with a severity glyph instead of blank indent — it gives the reader a
+        /// scannable left gutter, which plain spaces did not.
+        static string MarkerFor(Sev severity) => severity switch
+        {
+            Sev.Error => "⛔ ",
+            Sev.Warning => "⚠️ ",
+            _ => "💬 "
+        };
+
+        // Wrapped lines sit under the message text; the glyphs render about two cells wide.
+        const string Continuation = "   ";
+
+        static void AppendMarked(StringBuilder sb, string message, string marker)
         {
             var lines = message.Split('\n');
             for (var i = 0; i < lines.Length; i++)
-            {
-                sb.Append("     ").Append(lines[i].TrimEnd('\r'));
-                if (i == lines.Length - 1 && count > 1) sb.Append(" ×").Append(count);
-                sb.AppendLine();
-            }
+                sb.Append(i == 0 ? marker : Continuation).AppendLine(lines[i].TrimEnd('\r'));
         }
 
         static string FileName(string path)
@@ -859,69 +954,5 @@ namespace UnityJigs.Assistant.Editor
             return slash >= 0 ? path.Substring(slash + 1) : path;
         }
 
-        /// Messages from one call site usually differ in a single interpolated span. Pulling out the exact
-        /// common prefix/suffix is a pure string operation — no parsing, nothing to misread — and turns N
-        /// near-identical lines into one template plus the values that varied.
-        static bool TryTemplate(List<string> distinct, List<int> counts, out string template, out string varying)
-        {
-            template = null;
-            varying = null;
-            if (distinct.Count < 2) return false;
-
-            var min = int.MaxValue;
-            for (var i = 0; i < distinct.Count; i++) min = Math.Min(min, distinct[i].Length);
-            if (min == 0) return false;
-
-            var prefix = 0;
-            while (prefix < min && SameCharAt(distinct, prefix, false)) prefix++;
-
-            var suffix = 0;
-            while (suffix < min - prefix && SameCharAt(distinct, suffix, true)) suffix++;
-
-            // Snap both affixes out to word boundaries. Without this, "State: Skating" vs "State: Stomping"
-            // shares the "S" and the "ing" and you get "State: S…ing / varying: kat | tomp" — technically
-            // reconstructable, useless to read.
-            var sample = distinct[0];
-            while (prefix > 0 && IsWordChar(sample[prefix - 1])) prefix--;
-            while (suffix > 0 && IsWordChar(sample[sample.Length - suffix]) &&
-                   IsWordChar(sample[sample.Length - suffix - 1])) suffix--;
-
-            // Only worth it when the shared part genuinely dominates; otherwise listing the messages
-            // verbatim is clearer and barely longer.
-            var shared = prefix + suffix;
-            if (shared < 24 || shared < min / 2) return false;
-
-            var head = distinct[0].Substring(0, prefix);
-            var tail = distinct[0].Substring(distinct[0].Length - suffix, suffix);
-            template = head + "…" + tail;
-
-            var sb = new StringBuilder();
-            for (var i = 0; i < distinct.Count; i++)
-            {
-                if (i > 0) sb.Append(" | ");
-                var s = distinct[i];
-                sb.Append(s.Substring(prefix, s.Length - suffix - prefix));
-                if (counts[i] > 1) sb.Append(" ×").Append(counts[i]);
-            }
-
-            varying = sb.ToString();
-            return true;
-        }
-
-        static bool IsWordChar(char c) => char.IsLetterOrDigit(c);
-
-        static bool SameCharAt(List<string> items, int offset, bool fromEnd)
-        {
-            var first = items[0];
-            var c = fromEnd ? first[first.Length - 1 - offset] : first[offset];
-            for (var i = 1; i < items.Count; i++)
-            {
-                var s = items[i];
-                var d = fromEnd ? s[s.Length - 1 - offset] : s[offset];
-                if (c != d) return false;
-            }
-
-            return true;
-        }
     }
 }

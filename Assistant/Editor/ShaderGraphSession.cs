@@ -779,7 +779,7 @@ namespace UnityJigs.Assistant.Editor
                 nodesRemoved++;
             }
 
-            string GuidOf(object cat) => cat.GetType().GetProperty("categoryGuid", Inst)?.GetValue(cat) as string;
+            string? GuidOf(object cat) => cat.GetType().GetProperty("categoryGuid", Inst)?.GetValue(cat) as string;
             var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
                        ?? new List<object>();
             foreach (var c in cats)

@@ -84,7 +84,9 @@ namespace UnityJigs.Assistant.Editor
 
                 addRefsMethod.Invoke(builder, new object[] { packageAssemblyPaths });
                 _injected = true; // success — earlier returns leave it false so a later hook can retry
-                Debug.Log($"[McpAssemblyInjector] Injected {packageAssemblyPaths.Count} package assembly references into RunCommand compiler.");
+
+                // Silent on success, deliberately: this runs on every domain reload, and the paths that
+                // matter already shout — AssistantHackGuard.ReportMissing above, LogWarning below.
             }
             catch (Exception e)
             {

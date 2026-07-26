@@ -20,9 +20,9 @@ namespace UnityJigs.Assistant.Editor
     class RunCommandPlayModeWrapper : IUnityMcpTool
     {
         readonly object _original;          // the original IToolHandler (internal type)
-        readonly MethodInfo _exec;          // Task<object> ExecuteAsync(JObject)
-        readonly MethodInfo _inSchema;      // object GetInputSchema()
-        readonly MethodInfo _outSchema;     // object GetOutputSchema()
+        readonly MethodInfo? _exec;         // Task<object> ExecuteAsync(JObject)
+        readonly MethodInfo? _inSchema;     // object GetInputSchema()
+        readonly MethodInfo? _outSchema;    // object GetOutputSchema()
 
         public RunCommandPlayModeWrapper(object originalHandler)
         {
@@ -49,16 +49,18 @@ namespace UnityJigs.Assistant.Editor
                     return PlayModeStallError();
             }
 
-            var task = (Task<object>)_exec.Invoke(_original, new[] { parameters });
+            // _exec is non-null whenever this runs: the installer refuses to register a wrapper that
+            // can't delegate (see CanDelegate).
+            var task = (Task<object>)_exec!.Invoke(_original, new[] { parameters })!;
             var result = await task;
-            try { return MaybeEnrich(result); }
+            try { return MaybeEnrich(result)!; }
             catch { return result; } // enrichment must never break the underlying command
         }
 
-        public object GetInputSchema() => _inSchema?.Invoke(_original, null);
-        public object GetOutputSchema() => _outSchema?.Invoke(_original, null);
+        public object? GetInputSchema() => _inSchema?.Invoke(_original, null);
+        public object? GetOutputSchema() => _outSchema?.Invoke(_original, null);
 
-        static object MaybeEnrich(object result)
+        static object? MaybeEnrich(object? result)
         {
             if (result == null) return result;
             var rt = result.GetType();

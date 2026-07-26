@@ -163,7 +163,7 @@ namespace UnityJigs.Assistant.Editor
 
             // Inline a String-mode Custom Function's HLSL body when requested.
             if (expand && n.Type == "CustomFunctionNode" && n.FunctionMode == "String"
-                && !string.IsNullOrWhiteSpace(n.FunctionBody) && n.FunctionBody.Trim() != "Enter function body here...")
+                && !string.IsNullOrWhiteSpace(n.FunctionBody) && n.FunctionBody!.Trim() != "Enter function body here...")
             {
                 sb.AppendLine("        ⟪hlsl⟫");
                 foreach (var line in n.FunctionBody.Replace("\r\n", "\n").Split('\n'))
