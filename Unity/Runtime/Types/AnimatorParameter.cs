@@ -23,23 +23,44 @@ namespace UnityJigs.Types
         // ReSharper disable Unity.PerformanceAnalysis
         public Animator? Check(int id)
         {
+            // Unconfigured: the Name was never authored in the inspector, so Id is still the
+            // constructor's 0 and every Set() is a silent no-op for the life of the build. This used
+            // to fall through the `id == 0` skip below and log NOTHING, EVER — the failure mode that
+            // lets a blank parameter sit dead on a prefab undetected. Tested on the FIELD, because
+            // the ARGUMENT is legitimately 0; see the skip below.
+            if (Id == 0) return Warn("has no Name authored - author it in the inspector");
+
+            // A deliberate skip, not a fault: Trigger.SetIf(false) passes 0 to mean "don't fire".
+            if (id == 0) return null;
+
             var animator = Animator;
-            if (id == 0) animator = null;
-            else if (animator == null || animator.runtimeAnimatorController == null)
-            {
+            if (animator == null || animator.runtimeAnimatorController == null)
+                return Warn("has no Animator reference, or that Animator has no controller");
 
-                if (!_hasLogged) Debug.LogWarning($"Animator is null: {this}", Animator);
-                animator = null;
-            }
-            else if (Application.isEditor && !_hasLogged && !animator.HasParameter(id))
-            {
-                Debug.LogWarning($"Animator does not have a parameter with the id {id}.", Animator);
-                animator = null;
-            }
+            // Editor-only: a build trusts the authoring and skips the lookup.
+            if (Application.isEditor && !animator.HasParameter(id))
+                return Warn("is not a parameter on the assigned Animator's controller");
 
-            _hasLogged = true;
             return animator;
         }
+
+        // Warns at most once per instance and returns null, so callers read `return Warn(...)`.
+        // The budget is spent ONLY when something is actually logged: it used to be consumed by the
+        // first Check() call whatever the outcome, so a Trigger whose first use was SetIf(false)
+        // silenced every genuine warning that followed it.
+        private Animator? Warn(string problem)
+        {
+            if (_hasLogged) return null;
+            _hasLogged = true;
+            Debug.LogWarning($"AnimatorParameter {this} {problem}.", Animator);
+            return null;
+        }
+
+        // Identifies the parameter in warnings. Without this, `{this}` printed only the nested class
+        // name, which named neither the parameter nor its owner - and the context object is null in
+        // precisely the cases that warn, so the console entry led nowhere.
+        public override string ToString() =>
+            string.IsNullOrEmpty(Name) ? $"({Type}, unnamed)" : $"{Type} '{Name}'";
 
         [Serializable]
         public class Int : AnimatorParameter
