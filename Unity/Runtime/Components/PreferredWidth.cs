@@ -32,8 +32,14 @@ namespace UnityJigs.Components
 #endif
 
 
+        private bool _updating;
+
         private void UpdateRectTransform()
         {
+            // Writing to the rect re-fires OnRectTransformDimensionsChange synchronously; with
+            // several rect-driving components in one hierarchy that can cycle without converging.
+            // The guard caps any such cycle at depth 1 — the per-frame poll reconverges next tick.
+            if (_updating) return;
             if (!isActiveAndEnabled) return;
             var rt = (RectTransform)transform;
             var parentRt = (RectTransform)rt.parent;
@@ -43,7 +49,9 @@ namespace UnityJigs.Components
             _drtTracker.Add(this, RectTransform, DrivenTransformProperties.SizeDeltaX);
             if (size < 0) return;
             if (Mathf.Approximately(rt.sizeDelta.x, size)) return;
-            rt.sizeDelta = rt.sizeDelta.WithX(size);
+            _updating = true;
+            try { rt.sizeDelta = rt.sizeDelta.WithX(size); }
+            finally { _updating = false; }
         }
 
         public void SetLayoutVertical() { }

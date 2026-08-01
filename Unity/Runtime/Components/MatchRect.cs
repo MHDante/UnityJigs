@@ -18,6 +18,7 @@ namespace UnityJigs.Components
         [Tooltip("RectTransform to match. Leave null to match the grandparent.")]
         public RectTransform? Target;
 
+        private bool _updating;
         private DrivenRectTransformTracker _drtTracker;
         private RectTransform RectTransform => (RectTransform)transform;
 
@@ -30,6 +31,10 @@ namespace UnityJigs.Components
 
         private void UpdateRectTransform()
         {
+            // Writing to the rect re-fires OnRectTransformDimensionsChange synchronously; with
+            // several rect-driving components in one hierarchy that can cycle without converging.
+            // The guard caps any such cycle at depth 1 — the per-frame poll reconverges next tick.
+            if (_updating) return;
             if (!isActiveAndEnabled) return;
             var rt = RectTransform;
             var parent = rt.parent as RectTransform;
@@ -57,10 +62,18 @@ namespace UnityJigs.Components
             if (rt.anchorMin == pivot && rt.anchorMax == pivot &&
                 rt.sizeDelta == size && rt.anchoredPosition == anchoredPos) return;
 
-            rt.anchorMin = pivot;
-            rt.anchorMax = pivot;
-            rt.sizeDelta = size;
-            rt.anchoredPosition = anchoredPos;
+            _updating = true;
+            try
+            {
+                rt.anchorMin = pivot;
+                rt.anchorMax = pivot;
+                rt.sizeDelta = size;
+                rt.anchoredPosition = anchoredPos;
+            }
+            finally
+            {
+                _updating = false;
+            }
         }
     }
 }
