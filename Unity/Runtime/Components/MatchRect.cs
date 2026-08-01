@@ -5,14 +5,19 @@ using UnityEngine.UI;
 namespace UnityJigs.Components
 {
     /// <summary>
-    /// Drives this RectTransform to cover its grandparent's rect — the same result as parenting
-    /// directly under the grandparent with anchors (0,0)..(1,1) and zero offsets. Useful when an
-    /// intermediate parent (layout group cell, animated wrapper) sits in between. Assumes no
-    /// rotation between the parent and grandparent; a rect can't represent a rotated rect.
+    /// Drives this RectTransform to cover a target RectTransform's rect (the grandparent when
+    /// Target is null) — the same result as parenting directly under the target with anchors
+    /// (0,0)..(1,1) and zero offsets. Useful when an intermediate parent (layout group cell,
+    /// animated wrapper) sits in between, or to track a rect on another hierarchy branch.
+    /// Assumes no rotation between the parent and the target; a rect can't represent a
+    /// rotated rect. Non-ancestor targets that move in the same frame can lag by one frame.
     /// </summary>
     [ExecuteAlways, RequireComponent(typeof(RectTransform))]
-    public class MatchGrandparentRect : UIBehaviour, ILayoutSelfController
+    public class MatchRect : UIBehaviour, ILayoutSelfController
     {
+        [Tooltip("RectTransform to match. Leave null to match the grandparent.")]
+        public RectTransform? Target;
+
         private DrivenRectTransformTracker _drtTracker;
         private RectTransform RectTransform => (RectTransform)transform;
 
@@ -29,8 +34,9 @@ namespace UnityJigs.Components
             var rt = RectTransform;
             var parent = rt.parent as RectTransform;
             if (parent == null) return;
-            var grandparent = parent.parent as RectTransform;
-            if (grandparent == null) return;
+            var target = Target;
+            if (target == null) target = parent.parent as RectTransform;
+            if (target == null) return;
 
             _drtTracker.Clear();
             _drtTracker.Add(this, rt,
@@ -38,10 +44,10 @@ namespace UnityJigs.Components
                 DrivenTransformProperties.AnchoredPosition |
                 DrivenTransformProperties.SizeDelta);
 
-            // Grandparent rect corners, expressed in the parent's local space.
-            var gpRect = grandparent.rect;
-            Vector2 min = parent.InverseTransformPoint(grandparent.TransformPoint(gpRect.min));
-            Vector2 max = parent.InverseTransformPoint(grandparent.TransformPoint(gpRect.max));
+            // Target rect corners, expressed in the parent's local space.
+            var targetRect = target.rect;
+            Vector2 min = parent.InverseTransformPoint(target.TransformPoint(targetRect.min));
+            Vector2 max = parent.InverseTransformPoint(target.TransformPoint(targetRect.max));
             var size = max - min;
 
             // With anchors collapsed onto the parent's pivot, the anchor reference point is the
