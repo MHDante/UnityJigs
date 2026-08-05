@@ -10,7 +10,7 @@ namespace UnityJigs.SceneConstraints
     /// whose serialized [SceneManaged] list must mirror a set of components in the scene/prefab. The
     /// SceneConstraintRunner calls <see cref="EnforceSceneConstraints"/> automatically on scene save, on
     /// entering play, and during build. Gather the members however suits (subtree GetComponentsInChildren,
-    /// or a scene-wide FindObjectsByType) and hand them to <paramref name="ctx"/>; report anything that
+    /// or a scene-wide FindObjectsByType) and hand them to <c>ctx</c>; report anything that
     /// cannot be auto-fixed via <see cref="ISceneConstraintContext.Problem"/>.
     /// </summary>
     public interface ISceneConstraint

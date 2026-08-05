@@ -19,10 +19,10 @@ namespace UnityJigs.Assistant.Editor
     /// schema are unchanged. Installed/repaired by <see cref="RunCommandPlayModeWrapperInstaller"/>.
     class RunCommandPlayModeWrapper : IUnityMcpTool
     {
-        readonly object _original;          // the original IToolHandler (internal type)
-        readonly MethodInfo? _exec;         // Task<object> ExecuteAsync(JObject)
-        readonly MethodInfo? _inSchema;     // object GetInputSchema()
-        readonly MethodInfo? _outSchema;    // object GetOutputSchema()
+        private readonly object _original;          // the original IToolHandler (internal type)
+        private readonly MethodInfo? _exec;         // Task<object> ExecuteAsync(JObject)
+        private readonly MethodInfo? _inSchema;     // object GetInputSchema()
+        private readonly MethodInfo? _outSchema;    // object GetOutputSchema()
 
         public RunCommandPlayModeWrapper(object originalHandler)
         {
@@ -60,7 +60,7 @@ namespace UnityJigs.Assistant.Editor
         public object? GetInputSchema() => _inSchema?.Invoke(_original, null);
         public object? GetOutputSchema() => _outSchema?.Invoke(_original, null);
 
-        static object? MaybeEnrich(object? result)
+        private static object? MaybeEnrich(object? result)
         {
             if (result == null) return result;
             var rt = result.GetType();
@@ -75,19 +75,19 @@ namespace UnityJigs.Assistant.Editor
             return Response.Error(
                 "COMPILATION_IN_PROGRESS: Unity is compiling/importing and is not a play-mode stall — a normal " +
                 "in-progress build. Just retry in a few seconds.",
-                new { isCompiling = true, isPlaying = EditorApplication.isPlaying });
+                new { isCompiling = true, EditorApplication.isPlaying });
         }
 
         // EditorPrefs "ScriptCompilationDuringPlay": 0 = RecompileAndContinuePlaying,
         // 1 = RecompileAfterFinishedPlaying, 2 = StopPlayingAndRecompile. Only value 1 defers compilation
         // until play ends — the case where waiting for a compile is futile.
-        const int k_RecompileAfterFinishedPlaying = 1;
+        private const int RecompileAfterFinishedPlaying = 1;
 
-        static bool IsDeferredPlayModeCompile() =>
+        private static bool IsDeferredPlayModeCompile() =>
             EditorApplication.isPlaying &&
-            EditorPrefs.GetInt("ScriptCompilationDuringPlay", k_RecompileAfterFinishedPlaying) == k_RecompileAfterFinishedPlaying;
+            EditorPrefs.GetInt("ScriptCompilationDuringPlay", RecompileAfterFinishedPlaying) == RecompileAfterFinishedPlaying;
 
-        static object PlayModeStallError() =>
+        private static object PlayModeStallError() =>
             Response.Error(
                 "COMPILATION_IN_PROGRESS: the editor is in PLAY MODE with 'Recompile After Finished Playing', so " +
                 "your last code edit will NOT compile until you leave play mode — RunCommand cannot proceed and " +
@@ -101,9 +101,9 @@ namespace UnityJigs.Assistant.Editor
     [InitializeOnLoad]
     static class RunCommandPlayModeWrapperInstaller
     {
-        const string ToolName = "Unity.RunCommand";   // sanitizes to the registry key below
-        const string SanitizedName = "Unity_RunCommand";
-        static bool s_Installing;                      // re-entrancy guard (RegisterTool fires ToolsChanged)
+        private const string ToolName = "Unity.RunCommand";   // sanitizes to the registry key below
+        private const string SanitizedName = "Unity_RunCommand";
+        private static bool _Installing;                      // re-entrancy guard (RegisterTool fires ToolsChanged)
 
         static RunCommandPlayModeWrapperInstaller()
         {
@@ -112,12 +112,12 @@ namespace UnityJigs.Assistant.Editor
             McpToolRegistry.ToolsChanged += _ => Install();
         }
 
-        static void Install()
+        private static void Install()
         {
-            if (s_Installing) return;
+            if (_Installing) return;
             try
             {
-                s_Installing = true;
+                _Installing = true;
 
                 var getTool = typeof(McpToolRegistry).GetMethod("GetTool", BindingFlags.NonPublic | BindingFlags.Static);
                 if (getTool == null)
@@ -151,11 +151,11 @@ namespace UnityJigs.Assistant.Editor
             }
             finally
             {
-                s_Installing = false;
+                _Installing = false;
             }
         }
 
-        static bool IsOurWrapper(object handler)
+        private static bool IsOurWrapper(object handler)
         {
             // A registered IUnityMcpTool lives behind a ClassToolHandler with an `m_ToolInstance` field.
             var inst = handler.GetType().GetField("m_ToolInstance", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(handler);

@@ -12,7 +12,7 @@ namespace UnityJigs.Types
 
         public abstract AnimatorControllerParameterType Type { get; }
         [SerializeField] public Animator? Animator;
-        private bool _hasLogged;
+        private bool? _passedCheck;
 
         private AnimatorParameter(string name)
         {
@@ -20,28 +20,22 @@ namespace UnityJigs.Types
             if (!string.IsNullOrEmpty(name)) Id = Animator.StringToHash(name);
         }
 
-        // ReSharper disable Unity.PerformanceAnalysis
         public Animator? Check(int id)
         {
-            // Unconfigured: the Name was never authored in the inspector, so Id is still the
-            // constructor's 0 and every Set() is a silent no-op for the life of the build. This used
-            // to fall through the `id == 0` skip below and log NOTHING, EVER — the failure mode that
-            // lets a blank parameter sit dead on a prefab undetected. Tested on the FIELD, because
-            // the ARGUMENT is legitimately 0; see the skip below.
-            if (Id == 0) return Warn("has no Name authored - author it in the inspector");
-
-            // A deliberate skip, not a fault: Trigger.SetIf(false) passes 0 to mean "don't fire".
+            // A deliberate skip, parameter is unconfigured or 0 is passed on purpose to cause a skip.
             if (id == 0) return null;
+            if(_passedCheck == true) return Animator;
+            if(_passedCheck == false) return null;
 
-            var animator = Animator;
-            if (animator == null || animator.runtimeAnimatorController == null)
+            if (Animator == null || Animator.runtimeAnimatorController == null)
                 return Warn("has no Animator reference, or that Animator has no controller");
 
             // Editor-only: a build trusts the authoring and skips the lookup.
-            if (Application.isEditor && !animator.HasParameter(id))
+            if (Application.isEditor && !Animator.HasParameter(id))
                 return Warn("is not a parameter on the assigned Animator's controller");
 
-            return animator;
+            _passedCheck = true;
+            return Animator;
         }
 
         // Warns at most once per instance and returns null, so callers read `return Warn(...)`.
@@ -50,8 +44,7 @@ namespace UnityJigs.Types
         // silenced every genuine warning that followed it.
         private Animator? Warn(string problem)
         {
-            if (_hasLogged) return null;
-            _hasLogged = true;
+            _passedCheck = false;
             Debug.LogWarning($"AnimatorParameter {this} {problem}.", Animator);
             return null;
         }

@@ -43,11 +43,11 @@ namespace UnityJigs.Assistant.Editor
         /// Decompile an already-extracted snapshot (e.g. a live editing session's current state).
         public static string Decompile(SgGraph graph) => Emit(graph, expand: true);
 
-        static IEnumerable<string> SubgraphPaths(SgGraph g) =>
+        private static IEnumerable<string> SubgraphPaths(SgGraph g) =>
             g.Nodes.Where(n => n.Type == "SubGraphNode" && !string.IsNullOrEmpty(n.SubGraphPath))
                 .Select(n => n.SubGraphPath!).Distinct();
 
-        static string Emit(SgGraph g, bool expand)
+        private static string Emit(SgGraph g, bool expand)
         {
             var sb = new StringBuilder();
             sb.Append("shader ").Append(g.Name);
@@ -90,9 +90,9 @@ namespace UnityJigs.Assistant.Editor
             return sb.ToString();
         }
 
-        static bool IsSink(SgNode n) => n.Type is "BlockNode" or "SubGraphOutputNode";
+        private static bool IsSink(SgNode n) => n.Type is "BlockNode" or "SubGraphOutputNode";
 
-        static List<(string field, SgNode node, SgSlot slot)> BlockOutputs(List<SgNode> blocks)
+        private static List<(string field, SgNode node, SgSlot slot)> BlockOutputs(List<SgNode> blocks)
         {
             var outs = new List<(string, SgNode, SgSlot)>();
             foreach (var b in blocks)
@@ -103,7 +103,7 @@ namespace UnityJigs.Assistant.Editor
             return outs;
         }
 
-        static void EmitBody(StringBuilder sb, string header, List<(string field, SgNode node, SgSlot slot)> outputs,
+        private static void EmitBody(StringBuilder sb, string header, List<(string field, SgNode node, SgSlot slot)> outputs,
             EmitContext ctx, bool expand, bool collapseIdentity)
         {
             if (outputs.Count == 0) return;
@@ -141,7 +141,7 @@ namespace UnityJigs.Assistant.Editor
                 sb.Append("    ").Append(field).Append(" = ").Append(expr).AppendLine();
         }
 
-        static void EmitNode(StringBuilder sb, SgNode n, EmitContext ctx, bool expand)
+        private static void EmitNode(StringBuilder sb, SgNode n, EmitContext ctx, bool expand)
         {
             var v = ctx.VarName(n);
             // Show connected inputs and inputs with a literal; omit value-less defaults (samplers, mesh-UV…).
@@ -172,7 +172,7 @@ namespace UnityJigs.Assistant.Editor
             }
         }
 
-        static string NodeLabel(SgNode n)
+        private static string NodeLabel(SgNode n)
         {
             if (n.Type == "SubGraphNode") return n.Name;
             if (n.Type == "CustomFunctionNode")
@@ -180,19 +180,19 @@ namespace UnityJigs.Assistant.Editor
             return n.Type.EndsWith("Node") ? n.Type[..^4] : n.Type;
         }
 
-        static string StripSuffix(string s, string suffix) => s.EndsWith(suffix) ? s[..^suffix.Length] : s;
+        private static string StripSuffix(string s, string suffix) => s.EndsWith(suffix) ? s[..^suffix.Length] : s;
 
-        static string ShortPropType(string propTypeName) =>
+        private static string ShortPropType(string propTypeName) =>
             propTypeName.EndsWith("ShaderProperty") ? propTypeName[..^"ShaderProperty".Length] : propTypeName;
 
         /// Carries the per-emit mutable state (var-name assignment) and the lookups.
-        class EmitContext
+        private class EmitContext
         {
             public readonly SgGraph Graph;
             public readonly Dictionary<(string, int), SgEdge> Incoming;
             public readonly HashSet<string> Visited = new();
-            readonly Dictionary<string, string> _varNames = new();
-            readonly HashSet<string> _used = new();
+            private readonly Dictionary<string, string> _varNames = new();
+            private readonly HashSet<string> _used = new();
 
             public EmitContext(SgGraph graph, Dictionary<(string, int), SgEdge> incoming)
             {
@@ -239,7 +239,7 @@ namespace UnityJigs.Assistant.Editor
                 return string.IsNullOrEmpty(slot.Value) ? "default" : slot.Value;
             }
 
-            static string Sanitize(string name)
+            private static string Sanitize(string name)
             {
                 var sb = new StringBuilder();
                 var upperNext = false;

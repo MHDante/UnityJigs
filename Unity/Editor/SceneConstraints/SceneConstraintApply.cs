@@ -65,7 +65,7 @@ namespace UnityJigs.Editor.SceneConstraints
         private static int[] HierarchyKey(Object o)
         {
             var t = o as Transform ?? (o as Component)?.transform ?? (o as GameObject)?.transform;
-            if (!t) return System.Array.Empty<int>();
+            if (!t) return Array.Empty<int>();
             var idx = new List<int>();
             for (var c = t; c; c = c.parent) idx.Add(c.GetSiblingIndex());
             idx.Reverse();
@@ -125,7 +125,7 @@ namespace UnityJigs.Editor.SceneConstraints
         private static void ApplyToPrefabAsset(Component owner, string fieldName, List<Object> instanceItems,
             string path, string when)
         {
-            var ownerInAsset = PrefabUtility.GetCorrespondingObjectFromSourceAtPath(owner, path) as Component;
+            var ownerInAsset = PrefabUtility.GetCorrespondingObjectFromSourceAtPath(owner, path);
             if (!ownerInAsset) { WriteList(owner, fieldName, instanceItems); return; }
 
             var inAsset = new List<Object>(instanceItems.Count);
@@ -188,7 +188,7 @@ namespace UnityJigs.Editor.SceneConstraints
                     var mapped = PrefabUtility.GetCorrespondingObjectFromSourceAtPath(orderedValues[k], chain[j]);
                     if (mapped) pairs.Add((mapped, keyOf(orderedValues[k])));
                 }
-                var ownerInAsset = PrefabUtility.GetCorrespondingObjectFromSourceAtPath(owner, chain[j]) as Component;
+                var ownerInAsset = PrefabUtility.GetCorrespondingObjectFromSourceAtPath(owner, chain[j]);
                 if (ownerInAsset && WriteDict(ownerInAsset, fieldName, pairs))
                 {
                     EditorUtility.SetDirty(ownerInAsset);

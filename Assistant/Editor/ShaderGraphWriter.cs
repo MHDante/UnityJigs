@@ -45,7 +45,7 @@ namespace UnityJigs.Assistant.Editor
             return prop.GetType().GetProperty("value")?.GetValue(prop)?.ToString() ?? "<none>";
         }
 
-        static object? FindProperty(object graph, string referenceName)
+        private static object? FindProperty(object graph, string referenceName)
         {
             if (GraphProperties(graph) is not { } props) return null;
             foreach (var p in props)
@@ -53,15 +53,15 @@ namespace UnityJigs.Assistant.Editor
             return null;
         }
 
-        static string[] PropertyNames(object graph) =>
+        private static string[] PropertyNames(object graph) =>
             GraphProperties(graph) is { } props
                 ? props.Cast<object>().Select(p => p.GetType().GetProperty("referenceName")?.GetValue(p)?.ToString() ?? "?").ToArray()
                 : Array.Empty<string>();
 
-        static IEnumerable? GraphProperties(object graph) =>
+        private static IEnumerable? GraphProperties(object graph) =>
             Type("UnityEditor.ShaderGraph.GraphData").GetProperty("properties", Inst)?.GetValue(graph) as IEnumerable;
 
-        static object ParseValue(Type t, string s)
+        private static object ParseValue(Type t, string s)
         {
             s = s.Trim();
             if (t == typeof(bool)) return s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase);
@@ -74,7 +74,7 @@ namespace UnityJigs.Assistant.Editor
             throw new NotSupportedException($"unsupported property value type {t.Name}");
         }
 
-        static void Save(string path, object graph)
+        private static void Save(string path, object graph)
         {
             File.WriteAllText(path, Serialize(graph));
             AssetDatabase.ImportAsset(path);

@@ -119,9 +119,9 @@ namespace UnityJigs.Assistant.Editor
     ///     entries carry ordering signal, and flattening them hides repeating cycles.
     public static class ConsoleLogsMcpTool
     {
-        const string Title = "Read Unity console (compact)";
+        private const string Title = "Read Unity console (compact)";
 
-        const string Description =
+        private const string Description =
             "Reads the Unity Editor console, compactly. Prefer this over Unity.GetConsoleLogs and " +
             "Unity.ReadConsole: those inline the full stack trace into every message (~90% waste) and " +
             "ignore their own stack-trace flag.\n\n" +
@@ -155,15 +155,24 @@ namespace UnityJigs.Assistant.Editor
 
         // Required members: null! because they are either all resolved or _reflectionError is set and every
         // entry point bails before touching them.
-        static MethodInfo _start = null!, _end = null!, _getCount = null!, _getEntry = null!, _clear = null!;
-        static FieldInfo _fMessage = null!, _fFile = null!, _fLine = null!, _fMode = null!;
-        static Type _entryType = null!;
+        private static readonly MethodInfo Start = null!;
+        private static readonly MethodInfo End = null!;
+        private static readonly MethodInfo GetCount = null!;
+        private static readonly MethodInfo GetEntry = null!;
+        private static readonly MethodInfo Clear = null!;
+        private static readonly FieldInfo FMessage = null!;
+        private static readonly FieldInfo FFile = null!;
+        private static readonly FieldInfo FLine = null!;
+        private static readonly FieldInfo FMode = null!;
+        private static readonly Type EntryType = null!;
 
         // Genuinely optional — every use site null-checks these and degrades gracefully.
-        static MethodInfo? _getTimestamp;
-        static FieldInfo? _fCallstackStart, _fColumn, _fInstanceId;
-        static Type? _modeType;
-        static string? _reflectionError;
+        private static readonly MethodInfo? GetTimestamp;
+        private static readonly FieldInfo? FCallstackStart;
+        private static readonly FieldInfo? FColumn;
+        private static readonly FieldInfo? FInstanceId;
+        private static Type? _ModeType;
+        private static readonly string? ReflectionError;
 
         static ConsoleLogsMcpTool()
         {
@@ -174,46 +183,46 @@ namespace UnityJigs.Assistant.Editor
                 var entryType = asm.GetType("UnityEditor.LogEntry");
                 if (entriesType == null || entryType == null)
                     throw new Exception("UnityEditor.LogEntries / LogEntry not found");
-                _entryType = entryType;
+                EntryType = entryType;
 
                 const BindingFlags stat = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
                 const BindingFlags inst = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-                _start = Require(entriesType.GetMethod("StartGettingEntries", stat), "StartGettingEntries");
-                _end = Require(entriesType.GetMethod("EndGettingEntries", stat), "EndGettingEntries");
-                _getCount = Require(entriesType.GetMethod("GetCount", stat), "GetCount");
-                _getEntry = Require(entriesType.GetMethod("GetEntryInternal", stat), "GetEntryInternal");
-                _clear = Require(entriesType.GetMethod("Clear", stat), "Clear");
+                Start = Require(entriesType.GetMethod("StartGettingEntries", stat), "StartGettingEntries");
+                End = Require(entriesType.GetMethod("EndGettingEntries", stat), "EndGettingEntries");
+                GetCount = Require(entriesType.GetMethod("GetCount", stat), "GetCount");
+                GetEntry = Require(entriesType.GetMethod("GetEntryInternal", stat), "GetEntryInternal");
+                Clear = Require(entriesType.GetMethod("Clear", stat), "Clear");
 
                 // Optional: absent on older editors. Entries just lose their timestamps.
-                _getTimestamp = entriesType.GetMethod("GetEntryTimestampInternal", stat);
+                GetTimestamp = entriesType.GetMethod("GetEntryTimestampInternal", stat);
 
-                _fMessage = Require(_entryType.GetField("message", inst), "LogEntry.message");
-                _fFile = Require(_entryType.GetField("file", inst), "LogEntry.file");
-                _fLine = Require(_entryType.GetField("line", inst), "LogEntry.line");
-                _fMode = Require(_entryType.GetField("mode", inst), "LogEntry.mode");
+                FMessage = Require(EntryType.GetField("message", inst), "LogEntry.message");
+                FFile = Require(EntryType.GetField("file", inst), "LogEntry.file");
+                FLine = Require(EntryType.GetField("line", inst), "LogEntry.line");
+                FMode = Require(EntryType.GetField("mode", inst), "LogEntry.mode");
 
                 // The whole point of this tool. Optional so a rename degrades to "keep the whole blob"
                 // rather than breaking the reader outright.
                 ResolveModeMasks();
 
                 // Detail-view extras. Optional: their absence costs a line in Unity.LogDetail, nothing more.
-                _fColumn = _entryType.GetField("column", inst);
-                _fInstanceId = _entryType.GetField("instanceID", inst);
+                FColumn = EntryType.GetField("column", inst);
+                FInstanceId = EntryType.GetField("instanceID", inst);
 
-                _fCallstackStart = _entryType.GetField("callstackTextStartUTF16", inst);
-                if (_fCallstackStart == null)
+                FCallstackStart = EntryType.GetField("callstackTextStartUTF16", inst);
+                if (FCallstackStart == null)
                     Debug.LogError("[Unity.Logs] OUTDATED REFLECTION: LogEntry.callstackTextStartUTF16 is gone. " +
                                    "Messages will include their stack traces until the field is re-targeted in " +
                                    "UnityJigs/Assistant/Editor/ConsoleLogsMcpTool.cs.");
             }
             catch (Exception e)
             {
-                _reflectionError = e.Message;
+                ReflectionError = e.Message;
             }
         }
 
-        static T Require<T>(T? member, string name) where T : class
+        private static T Require<T>(T? member, string name) where T : class
         {
             if (member == null) throw new Exception($"could not resolve {name}");
             return member;
@@ -223,18 +232,18 @@ namespace UnityJigs.Assistant.Editor
         /// JSON-encodes the result, so each one reaches the reader as a literal "\r\n". Collapsing to "\n"
         /// halves that noise. It can't be removed entirely: the bridge requires the {success, message}
         /// envelope (returning a bare string fails the call outright), so the escaping is inherent.
-        static string Normalise(string report) => report.Replace("\r\n", "\n");
+        private static string Normalise(string report) => report.Replace("\r\n", "\n");
 
         // ---- Entry model ---------------------------------------------------------------------------
 
-        enum Sev
+        private enum Sev
         {
             Info,
             Warning,
             Error
         }
 
-        struct Entry
+        private struct Entry
         {
             public string Message; // head only — stack stripped
             public string? Stack; // null when the entry had none
@@ -254,41 +263,41 @@ namespace UnityJigs.Assistant.Editor
         // Do NOT shortcut this to "Error|Warning|Log" base bits: compiler diagnostics don't set one. A CS
         // warning's mode is ScriptCompileWarning|DontExtractStacktrace (266240 on 6000.3) with no base bit,
         // so a three-bit test reports every compile warning as Info — which is exactly the bug this replaced.
-        static int _errorMask = 1 | 2 | 16 | 64 | 256 | 2048 | 8192 | 32768 | 65536 | 131072 | 1048576 |
-                                2097152 | 4194304;
+        private static int _ErrorMask = 1 | 2 | 16 | 64 | 256 | 2048 | 8192 | 32768 | 65536 | 131072 | 1048576 |
+                                        2097152 | 4194304;
 
-        static int _warningMask = 128 | 512 | 4096;
+        private static int _WarningMask = 128 | 512 | 4096;
 
-        static readonly string[] ErrorFlagNames =
+        private static readonly string[] ErrorFlagNames =
         {
             "Error", "Assert", "Fatal", "AssetImportError", "ScriptingError", "ScriptCompileError",
             "ScriptingException", "GraphCompileError", "ScriptingAssertion", "StickyError", "ReportBug",
             "DisplayPreviousErrorInStatusBar", "VisualScriptingError"
         };
 
-        static readonly string[] WarningFlagNames =
+        private static readonly string[] WarningFlagNames =
         {
             "AssetImportWarning", "ScriptingWarning", "ScriptCompileWarning"
         };
 
-        static void ResolveModeMasks()
+        private static void ResolveModeMasks()
         {
-            _modeType = typeof(EditorApplication).Assembly
+            _ModeType = typeof(EditorApplication).Assembly
                 .GetType("UnityEditor.ConsoleWindow")
                 ?.GetNestedType("Mode", BindingFlags.Public | BindingFlags.NonPublic);
-            if (_modeType == null) return; // keep the numeric fallbacks
+            if (_ModeType == null) return; // keep the numeric fallbacks
 
-            var error = Accumulate(_modeType, ErrorFlagNames);
-            var warning = Accumulate(_modeType, WarningFlagNames);
+            var error = Accumulate(_ModeType, ErrorFlagNames);
+            var warning = Accumulate(_ModeType, WarningFlagNames);
 
             // Only adopt reflected values if both resolved to something; a partial read would be worse
             // than the fallback.
             if (error == 0 || warning == 0) return;
-            _errorMask = error;
-            _warningMask = warning;
+            _ErrorMask = error;
+            _WarningMask = warning;
         }
 
-        static int Accumulate(Type modeType, string[] names)
+        private static int Accumulate(Type modeType, string[] names)
         {
             var mask = 0;
             for (var i = 0; i < names.Length; i++)
@@ -297,10 +306,10 @@ namespace UnityJigs.Assistant.Editor
             return mask;
         }
 
-        static Sev SeverityOf(int mode)
+        private static Sev SeverityOf(int mode)
         {
-            if ((mode & _errorMask) != 0) return Sev.Error;
-            if ((mode & _warningMask) != 0) return Sev.Warning;
+            if ((mode & _ErrorMask) != 0) return Sev.Error;
+            if ((mode & _WarningMask) != 0) return Sev.Warning;
             return Sev.Info;
         }
 
@@ -310,10 +319,10 @@ namespace UnityJigs.Assistant.Editor
         // last one. If that fingerprint still matches, the console only grew and the delta is real; if it
         // doesn't, the console was cleared (clear-on-play does this constantly) and we re-baseline.
         // SessionState survives domain reloads and dies with the editor, which is exactly the lifetime we want.
-        const string KeyCount = "UnityJigs.Logs.Count";
-        const string KeyFingerprint = "UnityJigs.Logs.Fingerprint";
+        private const string KeyCount = "UnityJigs.Logs.Count";
+        private const string KeyFingerprint = "UnityJigs.Logs.Fingerprint";
 
-        static string Fingerprint(in Entry e)
+        private static string Fingerprint(in Entry e)
         {
             var head = e.Message.Length <= 32 ? e.Message : e.Message.Substring(0, 32);
             return $"{e.File}|{e.Line}|{e.Mode}|{e.Message.Length}|{head}";
@@ -326,7 +335,7 @@ namespace UnityJigs.Assistant.Editor
         /// every play. Fingerprinting the OLDEST entry gives a value that holds steady while the console
         /// grows and changes the moment it is cleared, so a caller holding an index from an earlier call can
         /// tell whether that index still means what it meant.
-        static string Generation(List<Entry> all)
+        private static string Generation(List<Entry> all)
         {
             if (all.Count == 0) return "empty";
 
@@ -348,13 +357,12 @@ namespace UnityJigs.Assistant.Editor
         [McpTool("Unity.Logs", Description, Title, Groups = new[] { "debug", "editor" })]
         public static object ReadLogs(JigsLogsParams parameters)
         {
-            if (_reflectionError != null)
-                return Response.Error($"Unity.Logs cannot read the console: {_reflectionError}. " +
+            if (ReflectionError != null)
+                return Response.Error($"Unity.Logs cannot read the console: {ReflectionError}. " +
                                       "UnityEditor's internal LogEntries API has changed; re-target the " +
                                       "reflection in UnityJigs/Assistant/Editor/ConsoleLogsMcpTool.cs.");
 
-            var p = parameters ?? new JigsLogsParams();
-            if (p.Refresh) AssetDatabase.Refresh();
+            if (parameters.Refresh) AssetDatabase.Refresh();
 
             var all = new List<Entry>();
             try
@@ -380,10 +388,10 @@ namespace UnityJigs.Assistant.Editor
             SessionState.SetString(KeyFingerprint, all.Count > 0 ? Fingerprint(all[all.Count - 1]) : "");
 
             // From is an explicit console position, so it wins over Since.
-            var paging = p.From.HasValue;
+            var paging = parameters.From.HasValue;
             var from = paging
-                ? Math.Min(Math.Max(p.From!.Value, 0), all.Count)
-                : p.Since == SinceModes.LastRead
+                ? Math.Min(Math.Max(parameters.From!.Value, 0), all.Count)
+                : parameters.Since == SinceModes.LastRead
                     ? newFrom
                     : 0;
 
@@ -391,23 +399,23 @@ namespace UnityJigs.Assistant.Editor
             for (var i = from; i < all.Count; i++)
             {
                 var e = all[i];
-                if (!WantsSeverity(p.Types, e.Severity)) continue;
-                if (!string.IsNullOrEmpty(p.Filter) &&
-                    e.Message.IndexOf(p.Filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (!WantsSeverity(parameters.Types, e.Severity)) continue;
+                if (!string.IsNullOrEmpty(parameters.Filter) &&
+                    e.Message.IndexOf(parameters.Filter!, StringComparison.OrdinalIgnoreCase) < 0) continue;
                 kept.Add(e);
             }
 
             var groups = GroupConsecutive(kept);
-            var dropped = Trim(groups, p.Max, paging);
+            var dropped = Trim(groups, parameters.Max, paging);
 
-            var report = Render(groups, all, kept.Count, all.Count - newFrom, wasReset, dropped, paging, p);
+            var report = Render(groups, all, all.Count - newFrom, wasReset, dropped, paging, parameters);
 
             return Response.Success(Normalise(report));
         }
 
-        const string DetailTitle = "Inspect one console entry in full";
+        private const string DetailTitle = "Inspect one console entry in full";
 
-        const string DetailDescription =
+        private const string DetailDescription =
             "Full, uncollapsed detail for a single console entry: complete message, complete stack trace, " +
             "file/line/column, decoded mode flags, and the context object the log was attached to " +
             "(Debug.Log(msg, obj)).\n\n" +
@@ -432,10 +440,8 @@ namespace UnityJigs.Assistant.Editor
         [McpTool("Unity.LogDetail", DetailDescription, DetailTitle, Groups = new[] { "debug", "editor" })]
         public static object LogDetail(JigsLogDetailParams parameters)
         {
-            if (_reflectionError != null)
-                return Response.Error($"Unity.LogDetail cannot read the console: {_reflectionError}");
-
-            var p = parameters ?? new JigsLogDetailParams();
+            if (ReflectionError != null)
+                return Response.Error($"Unity.LogDetail cannot read the console: {ReflectionError}");
 
             var all = new List<Entry>();
             try
@@ -450,17 +456,17 @@ namespace UnityJigs.Assistant.Editor
             if (all.Count == 0) return Response.Success("(console empty)");
 
             var matches = new List<Entry>();
-            var line = p.Line.GetValueOrDefault();
-            var addressed = !string.IsNullOrEmpty(p.File) || line > 0 || !string.IsNullOrEmpty(p.Match);
+            var line = parameters.Line.GetValueOrDefault();
+            var addressed = !string.IsNullOrEmpty(parameters.File) || line > 0 || !string.IsNullOrEmpty(parameters.Match);
 
             for (var i = 0; i < all.Count; i++)
             {
                 var e = all[i];
-                if (!string.IsNullOrEmpty(p.File) &&
-                    e.File.IndexOf(p.File, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (!string.IsNullOrEmpty(parameters.File) &&
+                    e.File.IndexOf(parameters.File!, StringComparison.OrdinalIgnoreCase) < 0) continue;
                 if (line > 0 && e.Line != line) continue;
-                if (!string.IsNullOrEmpty(p.Match) &&
-                    e.Message.IndexOf(p.Match, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (!string.IsNullOrEmpty(parameters.Match) &&
+                    e.Message.IndexOf(parameters.Match!, StringComparison.OrdinalIgnoreCase) < 0) continue;
                 matches.Add(e);
             }
 
@@ -483,13 +489,13 @@ namespace UnityJigs.Assistant.Editor
                                         "Run Unity.Logs and address the entry with the file:line it printed.");
 
             var chosen = new List<Entry>();
-            switch (p.Occurrence)
+            switch (parameters.Occurrence)
             {
                 case Occurrences.First:
                     chosen.Add(matches[0]);
                     break;
                 case Occurrences.All:
-                    var cap = p.Max > 0 ? p.Max : 5;
+                    var cap = parameters.Max > 0 ? parameters.Max : 5;
                     for (var i = 0; i < matches.Count && i < cap; i++) chosen.Add(matches[i]);
                     break;
                 default:
@@ -502,7 +508,7 @@ namespace UnityJigs.Assistant.Editor
             var sb = new StringBuilder();
             sb.Append(matches.Count).Append(" matched · showing ").Append(chosen.Count);
             if (matches.Count > chosen.Count)
-                sb.Append(p.Occurrence == Occurrences.All ? " · raise Max for more" : " · Occurrence=All for the rest");
+                sb.Append(parameters.Occurrence == Occurrences.All ? " · raise Max for more" : " · Occurrence=All for the rest");
             if (!addressed) sb.Append(" · most recent error");
             sb.Append(" · gen ").Append(Generation(all));
             sb.AppendLine();
@@ -520,7 +526,7 @@ namespace UnityJigs.Assistant.Editor
         /// Same shape as a Unity.Logs row — glyph, message, then '>' footnotes — with the extra fields the
         /// overview omits. The full path is kept here rather than the bare file name: this is the drill-down,
         /// so completeness beats brevity.
-        static void RenderDetail(StringBuilder sb, in Entry e, int maxFrames)
+        private static void RenderDetail(StringBuilder sb, in Entry e, int maxFrames)
         {
             AppendMarked(sb, e.Message, MarkerFor(e.Severity));
 
@@ -573,10 +579,10 @@ namespace UnityJigs.Assistant.Editor
         /// The instanceID is session-scoped. GlobalObjectId.GetGlobalObjectIdSlow would survive restarts and
         /// round-trips exactly (verified), but it is documented-slow and emits a GUID blob — not worth it for
         /// a locator consumed in the same breath as the log that produced it.
-        static string DescribeContext(int instanceId)
+        private static string DescribeContext(int instanceId)
         {
             // InstanceIDToObject(int) is deprecated in 6000.3 in favour of EntityIdToObject(EntityId).
-            var obj = EditorUtility.EntityIdToObject((EntityId)instanceId);
+            var obj = EditorUtility.EntityIdToObject(instanceId);
             if (obj == null) return $"id {instanceId} (no longer resolvable — scene closed or object destroyed)";
 
             var sb = new StringBuilder();
@@ -593,7 +599,7 @@ namespace UnityJigs.Assistant.Editor
             return sb.Append(" · id ").Append(instanceId).ToString();
         }
 
-        static string HierarchyPath(Transform t)
+        private static string HierarchyPath(Transform t)
         {
             var path = t.name;
             while (t.parent != null)
@@ -606,16 +612,16 @@ namespace UnityJigs.Assistant.Editor
         }
 
         /// Names the set bits so an odd severity can be diagnosed from the output instead of by re-probing.
-        static string DescribeMode(int mode)
+        private static string DescribeMode(int mode)
         {
-            if (_modeType == null) return "0x" + mode.ToString("X");
+            if (_ModeType == null) return "0x" + mode.ToString("X");
 
             var sb = new StringBuilder();
             var covered = 0;
-            var names = Enum.GetNames(_modeType);
+            var names = Enum.GetNames(_ModeType);
             for (var i = 0; i < names.Length; i++)
             {
-                if (!Enum.TryParse(_modeType, names[i], out var boxed)) continue;
+                if (!Enum.TryParse(_ModeType, names[i], out var boxed)) continue;
                 var bit = Convert.ToInt32(boxed);
                 if (bit == 0 || (mode & bit) != bit) continue;
                 if (sb.Length > 0) sb.Append(" | ");
@@ -639,10 +645,10 @@ namespace UnityJigs.Assistant.Editor
             "Clear Unity console", Groups = new[] { "debug", "editor" })]
         public static object ClearLogs()
         {
-            if (_reflectionError != null)
-                return Response.Error($"Unity.LogsClear cannot reach the console: {_reflectionError}");
+            if (ReflectionError != null)
+                return Response.Error($"Unity.LogsClear cannot reach the console: {ReflectionError}");
 
-            _clear.Invoke(null, null);
+            Clear.Invoke(null, null);
             SessionState.SetInt(KeyCount, 0);
             SessionState.SetString(KeyFingerprint, "");
             return Response.Success("Console cleared.");
@@ -650,13 +656,13 @@ namespace UnityJigs.Assistant.Editor
 
         // ---- Reading -------------------------------------------------------------------------------
 
-        static void ReadAll(List<Entry> into)
+        private static void ReadAll(List<Entry> into)
         {
-            _start.Invoke(null, null);
+            Start.Invoke(null, null);
             try
             {
-                var count = (int)_getCount.Invoke(null, null);
-                var box = Activator.CreateInstance(_entryType);
+                var count = (int)GetCount.Invoke(null, null);
+                var box = Activator.CreateInstance(EntryType);
                 var args = new object[2];
                 var tsArgs = new object[2];
 
@@ -664,12 +670,12 @@ namespace UnityJigs.Assistant.Editor
                 {
                     args[0] = i;
                     args[1] = box;
-                    _getEntry.Invoke(null, args);
+                    GetEntry.Invoke(null, args);
 
-                    var raw = _fMessage.GetValue(box) as string ?? "";
+                    var raw = FMessage.GetValue(box) as string ?? "";
                     if (raw.Length == 0) continue;
 
-                    var split = _fCallstackStart != null ? (int)_fCallstackStart.GetValue(box) : 0;
+                    var split = FCallstackStart != null ? (int)FCallstackStart.GetValue(box) : 0;
                     string message;
                     string? stack;
                     if (split > 0 && split <= raw.Length)
@@ -683,16 +689,16 @@ namespace UnityJigs.Assistant.Editor
                         stack = null;
                     }
 
-                    var mode = (int)_fMode.GetValue(box);
+                    var mode = (int)FMode.GetValue(box);
                     into.Add(new Entry
                     {
                         Message = message,
                         Stack = string.IsNullOrEmpty(stack) ? null : stack,
-                        File = _fFile.GetValue(box) as string ?? "",
-                        Line = (int)_fLine.GetValue(box),
-                        Column = _fColumn != null ? (int)_fColumn.GetValue(box) : 0,
+                        File = FFile.GetValue(box) as string ?? "",
+                        Line = (int)FLine.GetValue(box),
+                        Column = FColumn != null ? (int)FColumn.GetValue(box) : 0,
                         Mode = mode,
-                        InstanceId = _fInstanceId != null ? (int)_fInstanceId.GetValue(box) : 0,
+                        InstanceId = FInstanceId != null ? (int)FInstanceId.GetValue(box) : 0,
                         Index = i,
                         Severity = SeverityOf(mode),
                         Time = ReadTimestamp(i, tsArgs)
@@ -701,20 +707,20 @@ namespace UnityJigs.Assistant.Editor
             }
             finally
             {
-                _end.Invoke(null, null);
+                End.Invoke(null, null);
             }
         }
 
         /// GetEntryTimestampInternal hands back the whole message prefixed with "[HH:MM:SS] "; we only want
         /// the bracket.
-        static string ReadTimestamp(int index, object[] args)
+        private static string ReadTimestamp(int index, object[] args)
         {
-            if (_getTimestamp == null) return "";
+            if (GetTimestamp == null) return "";
             try
             {
                 args[0] = index;
                 args[1] = "";
-                _getTimestamp.Invoke(null, args);
+                GetTimestamp.Invoke(null, args);
                 var s = args[1] as string;
                 if (s == null || s.Length == 0 || s[0] != '[') return "";
                 var close = s.IndexOf(']');
@@ -726,7 +732,7 @@ namespace UnityJigs.Assistant.Editor
             }
         }
 
-        static bool WantsSeverity(LogSeverities[]? types, Sev sev)
+        private static bool WantsSeverity(LogSeverities[]? types, Sev sev)
         {
             if (types == null || types.Length == 0) return true;
             for (var i = 0; i < types.Length; i++)
@@ -742,7 +748,7 @@ namespace UnityJigs.Assistant.Editor
 
         // ---- Grouping ------------------------------------------------------------------------------
 
-        class Group
+        private class Group
         {
             public string File = "";
             public int Line;
@@ -763,7 +769,7 @@ namespace UnityJigs.Assistant.Editor
         /// cannot mislead. Earlier versions grouped by call site and factored differing messages into a
         /// shared template plus the varying spans; that was lossless but read as if text had been truncated,
         /// which is worse than printing a few more rows.
-        static List<Group> GroupConsecutive(List<Entry> entries)
+        private static List<Group> GroupConsecutive(List<Entry> entries)
         {
             var groups = new List<Group>();
             Group? current = null;
@@ -809,7 +815,7 @@ namespace UnityJigs.Assistant.Editor
         ///
         /// Direction follows intent: with no From the interesting end is the most recent, so older rows go;
         /// when paging forward from From, the interesting end is the start of the page, so later rows go.
-        static int Trim(List<Group> groups, int max, bool paging)
+        private static int Trim(List<Group> groups, int max, bool paging)
         {
             if (max <= 0 || groups.Count <= max) return 0;
 
@@ -821,7 +827,7 @@ namespace UnityJigs.Assistant.Editor
 
         // ---- Rendering -----------------------------------------------------------------------------
 
-        static string Render(List<Group> groups, List<Entry> all, int keptCount, int newCount,
+        private static string Render(List<Group> groups, List<Entry> all, int newCount,
             bool wasReset, int dropped, bool paging, JigsLogsParams p)
         {
             int err = 0, warn = 0, info = 0;
@@ -874,7 +880,7 @@ namespace UnityJigs.Assistant.Editor
             return sb.ToString().TrimEnd();
         }
 
-        static string? TimeSpanOf(List<Entry> all)
+        private static string? TimeSpanOf(List<Entry> all)
         {
             string? first = null, last = null;
             for (var i = 0; i < all.Count; i++)
@@ -891,7 +897,7 @@ namespace UnityJigs.Assistant.Editor
         /// Body first, provenance second: the message is what you read, so the call site and timing sit
         /// under it as a quoted footnote rather than pushing it down the page. Severity is carried by the
         /// glyph alone — an "ERR"/"WARN"/"INFO" word next to it would say the same thing twice.
-        static void RenderGroup(StringBuilder sb, Group g, JigsLogsParams p)
+        private static void RenderGroup(StringBuilder sb, Group g, JigsLogsParams p)
         {
             AppendMarked(sb, g.Message, MarkerFor(g.Severity));
 
@@ -930,7 +936,7 @@ namespace UnityJigs.Assistant.Editor
 
         /// Message lines lead with a severity glyph instead of blank indent — it gives the reader a
         /// scannable left gutter, which plain spaces did not.
-        static string MarkerFor(Sev severity) => severity switch
+        private static string MarkerFor(Sev severity) => severity switch
         {
             Sev.Error => "⛔ ",
             Sev.Warning => "⚠️ ",
@@ -938,16 +944,16 @@ namespace UnityJigs.Assistant.Editor
         };
 
         // Wrapped lines sit under the message text; the glyphs render about two cells wide.
-        const string Continuation = "   ";
+        private const string Continuation = "   ";
 
-        static void AppendMarked(StringBuilder sb, string message, string marker)
+        private static void AppendMarked(StringBuilder sb, string message, string marker)
         {
             var lines = message.Split('\n');
             for (var i = 0; i < lines.Length; i++)
                 sb.Append(i == 0 ? marker : Continuation).AppendLine(lines[i].TrimEnd('\r'));
         }
 
-        static string FileName(string path)
+        private static string FileName(string path)
         {
             if (string.IsNullOrEmpty(path)) return "(no source)";
             var slash = path.LastIndexOfAny(new[] { '/', '\\' });

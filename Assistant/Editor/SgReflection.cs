@@ -71,8 +71,8 @@ namespace UnityJigs.Assistant.Editor
     /// tool survives package updates.
     public static class SgReflection
     {
-        static Assembly? _asm;
-        internal static Assembly Asm => _asm ??= AppDomain.CurrentDomain.GetAssemblies()
+        private static Assembly? _Asm;
+        internal static Assembly Asm => _Asm ??= AppDomain.CurrentDomain.GetAssemblies()
             .First(a => a.GetName().Name == "Unity.ShaderGraph.Editor");
 
         internal static Type Type(string fullName) =>
@@ -88,9 +88,9 @@ namespace UnityJigs.Assistant.Editor
 
             var graph = Activator.CreateInstance(tGraph, nonPublic: true)!;
             var mmField = tGraph.GetField("messageManager", Inst);
-            var tMM = Asm.GetType("UnityEditor.Graphing.Util.MessageManager");
-            if (mmField != null && tMM != null)
-                mmField.SetValue(graph, Activator.CreateInstance(tMM, nonPublic: true));
+            var tmm = Asm.GetType("UnityEditor.Graphing.Util.MessageManager");
+            if (mmField != null && tmm != null)
+                mmField.SetValue(graph, Activator.CreateInstance(tmm, nonPublic: true));
 
             var json = File.ReadAllText(path, Encoding.UTF8);
             var deserialize = tMulti.GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -122,7 +122,7 @@ namespace UnityJigs.Assistant.Editor
         internal static SgGraph Extract(object graph, string name)
         {
             var tGraph = Type("UnityEditor.ShaderGraph.GraphData");
-            var tAMN = Type("UnityEditor.ShaderGraph.AbstractMaterialNode");
+            var tAmn = Type("UnityEditor.ShaderGraph.AbstractMaterialNode");
             var tSlot = Type("UnityEditor.ShaderGraph.MaterialSlot");
 
             var result = new SgGraph { Name = name };
@@ -141,9 +141,9 @@ namespace UnityJigs.Assistant.Editor
                 }
 
             // --- nodes + slots ---
-            var pObjId = tAMN.GetProperty("objectId")!;
-            var pName = tAMN.GetProperty("name")!;
-            var getSlots = tAMN.GetMethods()
+            var pObjId = tAmn.GetProperty("objectId")!;
+            var pName = tAmn.GetProperty("name")!;
+            var getSlots = tAmn.GetMethods()
                 .First(m => m.Name == "GetSlots" && m.IsGenericMethodDefinition).MakeGenericMethod(tSlot);
             var slotListType = typeof(List<>).MakeGenericType(tSlot);
             var pSlotId = tSlot.GetProperty("id")!;
@@ -153,7 +153,7 @@ namespace UnityJigs.Assistant.Editor
             var pSlotValue = tSlot.GetProperty("value");
 
             var getNodes = tGraph.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .First(m => m.Name == "GetNodes" && m.IsGenericMethodDefinition).MakeGenericMethod(tAMN);
+                .First(m => m.Name == "GetNodes" && m.IsGenericMethodDefinition).MakeGenericMethod(tAmn);
             if (getNodes.Invoke(graph, null) is IEnumerable nodeList)
                 foreach (var node in nodeList)
                 {
@@ -166,7 +166,7 @@ namespace UnityJigs.Assistant.Editor
 
                     try
                     {
-                        var ds = tAMN.GetProperty("drawState", Inst)?.GetValue(node);
+                        var ds = tAmn.GetProperty("drawState", Inst)?.GetValue(node);
                         if (ds != null && ds.GetType().GetProperty("position")?.GetValue(ds) is { } pos)
                         {
                             var prt = pos.GetType();
@@ -257,7 +257,7 @@ namespace UnityJigs.Assistant.Editor
 
         /// Builds a one-line target summary e.g. "URP/Unlit · Opaque · Cull:Off · ZWrite:ForceDisabled".
         /// Reads the target's private enum/bool fields and uses their names (Unity enums ToString cleanly).
-        static string SummarizeTarget(object target)
+        private static string SummarizeTarget(object target)
         {
             var tt = target.GetType();
             var pipeline = tt.Name.EndsWith("Target") ? tt.Name[..^"Target".Length] : tt.Name;
@@ -282,10 +282,10 @@ namespace UnityJigs.Assistant.Editor
         }
 
         internal const BindingFlags Inst = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-        static string Str(object? o) => o?.ToString() ?? "";
+        private static string Str(object? o) => o?.ToString() ?? "";
 
         /// SubGraphNode stores its target as a serialized asset ref blob; pull the first 32-hex GUID out of it.
-        static string? ParseGuid(string? s)
+        private static string? ParseGuid(string? s)
         {
             if (s == null) return null;
             for (var k = 0; k + 32 <= s.Length; k++)
@@ -302,7 +302,7 @@ namespace UnityJigs.Assistant.Editor
         /// Unity appends a short type-code suffix to slot display names: channel counts like
         /// "RGBA(4)"/"R(1)" and type hints like "Sampler(SS)"/"Predicate(B)"/"Texture(T2)".
         /// Strip it — that information is already in <see cref="SgSlot.Type"/>.
-        static string CleanSlotName(string name)
+        private static string CleanSlotName(string name)
         {
             if (!name.EndsWith(")")) return name;
             var open = name.LastIndexOf('(');

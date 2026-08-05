@@ -27,14 +27,14 @@ namespace UnityJigs.Assistant.Editor
     /// </code>
     public class ShaderGraphSession
     {
-        readonly string _path;
-        readonly object _graph;
+        private readonly string _path;
+        private readonly object _graph;
 
-        static Type TGraph => Type("UnityEditor.ShaderGraph.GraphData");
-        static Type TAMN => Type("UnityEditor.ShaderGraph.AbstractMaterialNode");
-        static Type TSlot => Type("UnityEditor.ShaderGraph.MaterialSlot");
+        private static Type TGraph => Type("UnityEditor.ShaderGraph.GraphData");
+        private static Type TAmn => Type("UnityEditor.ShaderGraph.AbstractMaterialNode");
+        private static Type TSlot => Type("UnityEditor.ShaderGraph.MaterialSlot");
 
-        ShaderGraphSession(string path, object graph) { _path = path; _graph = graph; }
+        private ShaderGraphSession(string path, object graph) { _path = path; _graph = graph; }
 
         public static ShaderGraphSession Open(string path) => new(path, Deserialize(path));
 
@@ -102,11 +102,11 @@ namespace UnityJigs.Assistant.Editor
 
         /// GraphData.AddNode's signature differs across ShaderGraph snapshots of the same nominal version
         /// (with/without a trailing `usePreviewPref` bool) — resolve whichever exists.
-        void GraphAddNode(object node)
+        private void GraphAddNode(object node)
         {
-            var two = TGraph.GetMethod("AddNode", new[] { TAMN, typeof(bool) });
-            if (two != null) { two.Invoke(_graph, new[] { node, (object)true }); return; }
-            TGraph.GetMethod("AddNode", new[] { TAMN })!.Invoke(_graph, new[] { node });
+            var two = TGraph.GetMethod("AddNode", new[] { TAmn, typeof(bool) });
+            if (two != null) { two.Invoke(_graph, new[] { node, true }); return; }
+            TGraph.GetMethod("AddNode", new[] { TAmn })!.Invoke(_graph, new[] { node });
         }
 
         /// Create a node by its C# class name (e.g. "MultiplyNode" — the read view shows it as "Multiply",
@@ -114,17 +114,17 @@ namespace UnityJigs.Assistant.Editor
         public string AddNode(string typeName)
         {
             var nodeType = Asm.GetTypes().FirstOrDefault(t =>
-                TAMN.IsAssignableFrom(t) && !t.IsAbstract &&
+                TAmn.IsAssignableFrom(t) && !t.IsAbstract &&
                 (t.Name == typeName || t.Name == typeName + "Node"));
             if (nodeType == null) return $"node type not found: '{typeName}' (use the C# class name, e.g. 'MultiplyNode')";
             var node = Activator.CreateInstance(nodeType, nonPublic: true)!;
             GraphAddNode(node);
-            return $"added {nodeType.Name} -> id {TAMN.GetProperty("objectId")!.GetValue(node)}";
+            return $"added {nodeType.Name} -> id {TAmn.GetProperty("objectId")!.GetValue(node)}";
         }
 
         public string RemoveNode(string nodeId)
         {
-            TGraph.GetMethod("RemoveNode", new[] { TAMN })!.Invoke(_graph, new[] { Node(nodeId) });
+            TGraph.GetMethod("RemoveNode", new[] { TAmn })!.Invoke(_graph, new[] { Node(nodeId) });
             return $"removed node {nodeId}";
         }
 
@@ -133,7 +133,7 @@ namespace UnityJigs.Assistant.Editor
         public string SetNodePosition(string nodeId, float x, float y)
         {
             var node = Node(nodeId);
-            var pDraw = TAMN.GetProperty("drawState", Inst)!;
+            var pDraw = TAmn.GetProperty("drawState", Inst)!;
             var ds = pDraw.GetValue(node)!;
             var pPos = ds.GetType().GetProperty("position")!;
             var r = (Rect)pPos.GetValue(ds)!;
@@ -157,7 +157,7 @@ namespace UnityJigs.Assistant.Editor
             var hits = 0; var detail = "";
             foreach (var target in targets)
             {
-                var t = (object)target;
+                var t = target;
                 var p = t.GetType().GetProperty(property, BindingFlags.Public | BindingFlags.Instance);
                 if (p?.GetSetMethod() == null)
                 {
@@ -246,7 +246,7 @@ namespace UnityJigs.Assistant.Editor
 
         // ---------- blackboard: properties & keywords ----------
 
-        static readonly Dictionary<string, string> PropAlias = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, string> PropAlias = new(StringComparer.OrdinalIgnoreCase)
         {
             { "float", "Vector1ShaderProperty" }, { "vector1", "Vector1ShaderProperty" },
             { "vector2", "Vector2ShaderProperty" }, { "vector3", "Vector3ShaderProperty" }, { "vector4", "Vector4ShaderProperty" },
@@ -304,7 +304,7 @@ namespace UnityJigs.Assistant.Editor
             var node = Activator.CreateInstance(tSub, nonPublic: true)!;
             tSub.GetProperty("asset")!.SetValue(node, asset);
             GraphAddNode(node);
-            return $"added SubGraphNode -> id {TAMN.GetProperty("objectId")!.GetValue(node)} ({subGraphPath})";
+            return $"added SubGraphNode -> id {TAmn.GetProperty("objectId")!.GetValue(node)} ({subGraphPath})";
         }
 
         /// Configure a CustomFunctionNode (add it first via AddNode(""CustomFunctionNode""), then AddSlot the I/O).
@@ -346,7 +346,7 @@ namespace UnityJigs.Assistant.Editor
             var slotType = Enum.Parse(EnumTypeAny("SlotType"),
                 inout.StartsWith("out", StringComparison.OrdinalIgnoreCase) ? "Output" : "Input", true);
             var slot = CreateSlot(tSlot, slotId, name, slotType);
-            node.GetType().GetMethod("AddSlot", new[] { TSlot, typeof(bool) })!.Invoke(node, new[] { slot, (object)true });
+            node.GetType().GetMethod("AddSlot", new[] { TSlot, typeof(bool) })!.Invoke(node, new[] { slot, true });
             return $"added {inout} slot {slotId} '{name}' ({type}) to {nodeId}";
         }
 
@@ -357,12 +357,12 @@ namespace UnityJigs.Assistant.Editor
             var prop = GraphProperties().FirstOrDefault(p =>
                 p.GetType().GetProperty("referenceName")?.GetValue(p)?.ToString() == referenceName);
             if (prop == null) return $"property not found: {referenceName}";
-            var tPN = Type("UnityEditor.ShaderGraph.PropertyNode");
-            var node = Activator.CreateInstance(tPN, nonPublic: true)!;
+            var tPn = Type("UnityEditor.ShaderGraph.PropertyNode");
+            var node = Activator.CreateInstance(tPn, nonPublic: true)!;
             GraphAddNode(node);
-            tPN.GetProperty("property", Inst)!.SetValue(node, prop); // the setter binds the property AND builds the output slot
-            (tPN.GetMethod("SetupSlots", Inst) ?? tPN.GetMethod("UpdateNodeAfterDeserialization", Inst))?.Invoke(node, null);
-            return S(TAMN.GetProperty("objectId")!.GetValue(node));
+            tPn.GetProperty("property", Inst)!.SetValue(node, prop); // the setter binds the property AND builds the output slot
+            (tPn.GetMethod("SetupSlots", Inst) ?? tPn.GetMethod("UpdateNodeAfterDeserialization", Inst))?.Invoke(node, null);
+            return S(TAmn.GetProperty("objectId")!.GetValue(node));
         }
 
         /// Add a KeywordNode bound to an existing blackboard keyword (by reference name). For a Boolean keyword the
@@ -374,12 +374,12 @@ namespace UnityJigs.Assistant.Editor
             var kw = GraphKeywords().FirstOrDefault(k =>
                 k.GetType().GetProperty("referenceName")?.GetValue(k)?.ToString() == referenceName);
             if (kw == null) return $"keyword not found: {referenceName}";
-            var tKN = Type("UnityEditor.ShaderGraph.KeywordNode");
-            var node = Activator.CreateInstance(tKN, nonPublic: true)!;
+            var tKn = Type("UnityEditor.ShaderGraph.KeywordNode");
+            var node = Activator.CreateInstance(tKn, nonPublic: true)!;
             GraphAddNode(node);
-            tKN.GetProperty("keyword", Inst)!.SetValue(node, kw); // setter binds the keyword
-            (tKN.GetMethod("UpdateNode", Inst) ?? tKN.GetMethod("UpdatePorts", Inst))?.Invoke(node, null); // build On/Off/Out slots
-            return S(TAMN.GetProperty("objectId")!.GetValue(node));
+            tKn.GetProperty("keyword", Inst)!.SetValue(node, kw); // setter binds the keyword
+            (tKn.GetMethod("UpdateNode", Inst) ?? tKn.GetMethod("UpdatePorts", Inst))?.Invoke(node, null); // build On/Off/Out slots
+            return S(TAmn.GetProperty("objectId")!.GetValue(node));
         }
 
         /// Set a node-internal SETTING (a non-slot field/property), e.g. PositionNode space=Object,
@@ -433,10 +433,10 @@ namespace UnityJigs.Assistant.Editor
         {
             var outNode = GetNodes().FirstOrDefault(n => n.GetType().Name == "SubGraphOutputNode");
             if (outNode == null) return "no SubGraphOutputNode on this graph (is it a subgraph?)";
-            var tCSVT = EnumTypeAny("ConcreteSlotValueType");
-            var add = outNode.GetType().GetMethod("AddSlot", new[] { tCSVT });
+            var tCsvt = EnumTypeAny("ConcreteSlotValueType");
+            var add = outNode.GetType().GetMethod("AddSlot", new[] { tCsvt });
             if (add == null) return "SubGraphOutputNode.AddSlot(ConcreteSlotValueType) not found";
-            add.Invoke(outNode, new[] { Enum.Parse(tCSVT, MapConcrete(type), true) });
+            add.Invoke(outNode, new[] { Enum.Parse(tCsvt, MapConcrete(type), true) });
             return $"added subgraph output ({type})";
         }
 
@@ -447,29 +447,29 @@ namespace UnityJigs.Assistant.Editor
         public string ImportNodes(string sourcePath, params string[] nodeIds)
         {
             var src = Open(sourcePath);
-            var pObjId = TAMN.GetProperty("objectId")!;
+            var pObjId = TAmn.GetProperty("objectId")!;
             var requested = nodeIds.Select(id => (id, node: src.Node(id))).ToList();
             var compute = requested.Where(x => x.node.GetType().Name != "PropertyNode").ToList();
             var propNodes = requested.Where(x => x.node.GetType().Name == "PropertyNode").ToList();
             var computeIds = new HashSet<string>(compute.Select(x => x.id));
 
             // 1) faithfully clone the COMPUTE nodes + their internal edges via copy/paste (config preserved).
-            var tCPG = Type("UnityEditor.ShaderGraph.CopyPasteGraph");
-            var cpg = Activator.CreateInstance(tCPG, nonPublic: true)!;
-            var addNode = tCPG.GetMethods(Inst).First(m => m.Name == "AddNode");
-            var addEdge = tCPG.GetMethods(Inst).First(m => m.Name == "AddEdge");
+            var tCpg = Type("UnityEditor.ShaderGraph.CopyPasteGraph");
+            var cpg = Activator.CreateInstance(tCpg, nonPublic: true)!;
+            var addNode = tCpg.GetMethods(Inst).First(m => m.Name == "AddNode");
+            var addEdge = tCpg.GetMethods(Inst).First(m => m.Name == "AddEdge");
             foreach (var x in compute) addNode.Invoke(cpg, new[] { x.node });
             foreach (var e in SrcEdges(src._graph))
             {
                 var (f, t, _, _) = EdgeFull(e, pObjId);
                 if (computeIds.Contains(f) && computeIds.Contains(t)) addEdge.Invoke(cpg, new[] { e });
             }
-            var cpg2 = tCPG.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
-                .First(m => m.Name == "FromJson").Invoke(null, new object[] { Serialize(cpg), _graph })!;
+            var cpg2 = tCpg.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+                .First(m => m.Name == "FromJson").Invoke(null, new[] { Serialize(cpg), _graph })!;
             var tEdge = EdgeType(_graph);
-            var remapped = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(TAMN))!;
+            var remapped = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(TAmn))!;
             var remappedEdges = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(tEdge))!;
-            TGraph.GetMethods(Inst).First(m => m.Name == "PasteGraph").Invoke(_graph, new object[] { cpg2, remapped, remappedEdges });
+            TGraph.GetMethods(Inst).First(m => m.Name == "PasteGraph").Invoke(_graph, new[] { cpg2, remapped, remappedEdges });
 
             // map source compute id -> new target id (paste order matches add order)
             var newIds = remapped.Cast<object>().Select(n => S(pObjId.GetValue(n))).ToList();
@@ -500,10 +500,10 @@ namespace UnityJigs.Assistant.Editor
             return string.Join(" ", newIds);
         }
 
-        IEnumerable<object> SrcEdges(object graph) =>
+        private IEnumerable<object> SrcEdges(object graph) =>
             TGraph.GetProperty("edges", Inst)?.GetValue(graph) is IEnumerable e ? e.Cast<object>() : Enumerable.Empty<object>();
 
-        static (string from, string to, int fromSlot, int toSlot) EdgeFull(object edge, PropertyInfo pObjId)
+        public static (string from, string to, int fromSlot, int toSlot) EdgeFull(object edge, PropertyInfo pObjId)
         {
             var et = edge.GetType();
             var outRef = et.GetProperty("outputSlot")!.GetValue(edge)!;
@@ -515,7 +515,7 @@ namespace UnityJigs.Assistant.Editor
                 (int)rt.GetProperty("slotId")!.GetValue(outRef)!, (int)rt.GetProperty("slotId")!.GetValue(inRef)!);
         }
 
-        static string FormatVal(object? v) => v switch
+        private static string FormatVal(object? v) => v switch
         {
             float f => f.ToString(CultureInfo.InvariantCulture),
             Vector2 v2 => $"{v2.x},{v2.y}",
@@ -526,12 +526,12 @@ namespace UnityJigs.Assistant.Editor
             _ => "0",
         };
 
-        Type EdgeType(object graph) => SrcEdges(graph).FirstOrDefault()?.GetType() ?? Type("UnityEditor.Graphing.Edge");
+        private Type EdgeType(object graph) => SrcEdges(graph).FirstOrDefault()?.GetType() ?? Type("UnityEditor.Graphing.Edge");
 
-        IEnumerable<object> GetNodes()
+        private IEnumerable<object> GetNodes()
         {
             var m = TGraph.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .First(x => x.Name == "GetNodes" && x.IsGenericMethodDefinition).MakeGenericMethod(TAMN);
+                .First(x => x.Name == "GetNodes" && x.IsGenericMethodDefinition).MakeGenericMethod(TAmn);
             return m.Invoke(_graph, null) is IEnumerable e ? e.Cast<object>() : Enumerable.Empty<object>();
         }
 
@@ -541,7 +541,7 @@ namespace UnityJigs.Assistant.Editor
         public string ClearForSubGraph()
         {
             var outNode = GetNodes().FirstOrDefault(n => n.GetType().Name == "SubGraphOutputNode");
-            var removeNode = TGraph.GetMethod("RemoveNode", new[] { TAMN })!;
+            var removeNode = TGraph.GetMethod("RemoveNode", new[] { TAmn })!;
             foreach (var n in GetNodes().Where(n => n.GetType().Name != "SubGraphOutputNode").ToList())
                 removeNode.Invoke(_graph, new[] { n });
             var removeInput = TGraph.GetMethods(Inst).First(m => m.Name == "RemoveGraphInput");
@@ -549,17 +549,17 @@ namespace UnityJigs.Assistant.Editor
             if (outNode != null)
             {
                 var slotList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(TSlot))!;
-                TAMN.GetMethods().First(m => m.Name == "GetSlots" && m.IsGenericMethodDefinition)
+                TAmn.GetMethods().First(m => m.Name == "GetSlots" && m.IsGenericMethodDefinition)
                     .MakeGenericMethod(TSlot).Invoke(outNode, new object[] { slotList });
                 var pSlotId = TSlot.GetProperty("id")!;
-                var removeSlot = TAMN.GetMethod("RemoveSlot", new[] { typeof(int) })!;
+                var removeSlot = TAmn.GetMethod("RemoveSlot", new[] { typeof(int) })!;
                 foreach (var sl in slotList.Cast<object>().ToList())
                     removeSlot.Invoke(outNode, new object[] { (int)pSlotId.GetValue(sl)! });
             }
             return "cleared to blank subgraph";
         }
 
-        IEnumerable<object> GraphInputs()
+        private IEnumerable<object> GraphInputs()
         {
             var list = new List<object>();
             if (TGraph.GetProperty("properties", Inst)?.GetValue(_graph) is IEnumerable props) list.AddRange(props.Cast<object>());
@@ -567,7 +567,7 @@ namespace UnityJigs.Assistant.Editor
             return list;
         }
 
-        static object MakeJsonRef(Type jsonRefT, object value)
+        public static object MakeJsonRef(Type jsonRefT, object value)
         {
             var op = jsonRefT.GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .FirstOrDefault(m => m.Name == "op_Implicit" && m.GetParameters().Length == 1 && m.ReturnType == jsonRefT);
@@ -577,9 +577,9 @@ namespace UnityJigs.Assistant.Editor
             return ctor != null ? ctor.Invoke(new[] { value })! : throw new Exception("cannot construct JsonRef");
         }
 
-        static string S(object? o) => o?.ToString() ?? "";
+        private static string S(object? o) => o?.ToString() ?? "";
 
-        static string MapConcrete(string t) => t switch
+        private static string MapConcrete(string t) => t switch
         {
             "Float" or "Vector1" => "Vector1",
             "Vector2" => "Vector2", "Vector3" => "Vector3",
@@ -591,20 +591,20 @@ namespace UnityJigs.Assistant.Editor
 
         // ---------- mutator helpers ----------
 
-        IEnumerable<object> ActiveTargets() =>
+        private IEnumerable<object> ActiveTargets() =>
             TGraph.GetProperty("activeTargets", Inst)?.GetValue(_graph) is IEnumerable e ? e.Cast<object>() : Enumerable.Empty<object>();
 
-        void AddGraphInput(object input)
+        private void AddGraphInput(object input)
         {
             var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
             TGraph.GetMethod("AddGraphInput", new[] { shaderInputT, typeof(int) })!
-                .Invoke(_graph, new object[] { input, -1 });
+                .Invoke(_graph, new[] { input, -1 });
             InsertIntoDefaultCategory(input); // else it won't appear in the blackboard UI (still compiles though)
         }
 
         /// Make a graph input (property/keyword) a child of a blackboard category — without this it is invisible
         /// in the blackboard UI even though it compiles. Uses the first existing category, creating one if none.
-        void InsertIntoDefaultCategory(object input)
+        private void InsertIntoDefaultCategory(object input)
         {
             var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>().ToList()
                        ?? new List<object>();
@@ -621,18 +621,18 @@ namespace UnityJigs.Assistant.Editor
         /// Insert `input` into `cat` exactly once: first PURGES every raw reference to it from ALL categories
         /// (GraphData.InsertItemIntoCategory appends with no dedup check, and a child can legally appear in only
         /// one category), then inserts a single ref. This is the dedup-safe primitive all category moves go through.
-        void InsertIntoCategory(object cat, object input)
+        private void InsertIntoCategory(object cat, object input)
         {
             PurgeFromCategories(input);
             var guid = cat.GetType().GetProperty("categoryGuid", Inst)?.GetValue(cat) as string;
             var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
             TGraph.GetMethod("InsertItemIntoCategory", new[] { typeof(string), shaderInputT, typeof(int) })!
-                .Invoke(_graph, new object[] { guid!, input, -1 });
+                .Invoke(_graph, new[] { guid!, input, -1 });
         }
 
         /// Remove EVERY raw child reference to `input` from every category (operates on the raw m_ChildObjectList,
         /// so it clears pre-existing duplicates that the de-duplicating CategoryData.Children getter would mask).
-        void PurgeFromCategories(object input)
+        private void PurgeFromCategories(object input)
         {
             var oid = S(input.GetType().GetProperty("objectId", Inst)?.GetValue(input));
             var cats = (TGraph.GetProperty("categories", Inst)?.GetValue(_graph) as IEnumerable)?.Cast<object>()
@@ -754,7 +754,7 @@ namespace UnityJigs.Assistant.Editor
             var def = cdT.GetMethod("DefaultCategory", BindingFlags.Public | BindingFlags.Static)!
                 .Invoke(null, new object?[] { null })!; // CategoryData with name == "" (empty default)
             TGraph.GetMethod("AddCategory", new[] { cdT })!.Invoke(_graph, new[] { def });
-            TGraph.GetMethod("MoveCategory", new[] { cdT, typeof(int) })!.Invoke(_graph, new object[] { def, 0 });
+            TGraph.GetMethod("MoveCategory", new[] { cdT, typeof(int) })!.Invoke(_graph, new[] { def, 0 });
             return "inserted empty default (unnamed) category at index 0";
         }
 
@@ -775,7 +775,7 @@ namespace UnityJigs.Assistant.Editor
                 var node = getNode.Invoke(_graph, new object[] { n.Id });
                 var bound = node!.GetType().GetProperty("property", Inst)?.GetValue(node);
                 if (S(bound?.GetType().GetProperty("objectId", Inst)?.GetValue(bound)) != propOid) continue;
-                TGraph.GetMethod("RemoveNode", new[] { TAMN })!.Invoke(_graph, new[] { node });
+                TGraph.GetMethod("RemoveNode", new[] { TAmn })!.Invoke(_graph, new[] { node });
                 nodesRemoved++;
             }
 
@@ -784,7 +784,7 @@ namespace UnityJigs.Assistant.Editor
                        ?? new List<object>();
             foreach (var c in cats)
                 if ((bool)(c.GetType().GetMethod("IsItemInCategory")?.Invoke(c, new[] { prop }) ?? false))
-                    TGraph.GetMethod("RemoveItemFromCategory")!.Invoke(_graph, new object[] { GuidOf(c)!, prop });
+                    TGraph.GetMethod("RemoveItemFromCategory")!.Invoke(_graph, new[] { GuidOf(c)!, prop });
 
             var shaderInputT = Type("UnityEditor.ShaderGraph.Internal.ShaderInput");
             TGraph.GetMethod("RemoveGraphInput", new[] { shaderInputT })!.Invoke(_graph, new[] { prop });
@@ -821,15 +821,16 @@ namespace UnityJigs.Assistant.Editor
             return $"tidied {moved} property node(s) at origin";
         }
 
-        static Type EnumType(string name) =>
+        private static Type EnumType(string name) =>
             Asm.GetType("UnityEditor.ShaderGraph.Internal." + name) ?? EnumTypeAny(name);
-        static Type EnumTypeAny(string name) =>
+
+        private static Type EnumTypeAny(string name) =>
             Asm.GetTypes().First(t => t.Name == name && t.IsEnum);
 
         /// Set a property (incl. non-public setter) or its backing field, walking the type hierarchy.
         /// Handles ShaderGraph's get-only auto-properties (e.g. keyword settings) and the displayName/refName
         /// fields that don't follow the m_Xxx convention.
-        static bool SetMember(object o, string name, object val)
+        private static bool SetMember(object o, string name, object val)
         {
             const BindingFlags bf = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
             for (var t = o.GetType(); t != null && t != typeof(object); t = t.BaseType)
@@ -851,10 +852,10 @@ namespace UnityJigs.Assistant.Editor
             return false;
         }
 
-        static string Cap(string s) => char.ToUpperInvariant(s[0]) + s.Substring(1);
+        private static string Cap(string s) => char.ToUpperInvariant(s[0]) + s.Substring(1);
 
         /// Build a MaterialSlot via its longest ctor, filling params by name/type with sane defaults.
-        static object CreateSlot(Type tSlot, int id, string name, object slotType)
+        private static object CreateSlot(Type tSlot, int id, string name, object slotType)
         {
             var ctor = tSlot.GetConstructors().Where(c => c.GetParameters().Length > 0)
                 .OrderByDescending(c => c.GetParameters().Length).First();
@@ -915,33 +916,33 @@ namespace UnityJigs.Assistant.Editor
 
         // ---------- internals ----------
 
-        IEnumerable<object> GraphProperties() =>
+        private IEnumerable<object> GraphProperties() =>
             TGraph.GetProperty("properties", Inst)?.GetValue(_graph) is IEnumerable e ? e.Cast<object>() : Enumerable.Empty<object>();
 
-        IEnumerable<object> GraphKeywords() =>
+        private IEnumerable<object> GraphKeywords() =>
             TGraph.GetProperty("keywords", Inst)?.GetValue(_graph) is IEnumerable e ? e.Cast<object>() : Enumerable.Empty<object>();
 
-        object Node(string nodeId)
+        private object Node(string nodeId)
         {
             var get = TGraph.GetMethods().First(m =>
                 m.Name == "GetNodeFromId" && !m.IsGenericMethod && m.GetParameters().Length == 1);
             return get.Invoke(_graph, new object[] { nodeId }) ?? throw new Exception($"node not found: {nodeId}");
         }
 
-        static object SlotRef(object node, int slotId) =>
-            TAMN.GetMethod("GetSlotReference", new[] { typeof(int) })!.Invoke(node, new object[] { slotId })!;
+        private static object SlotRef(object node, int slotId) =>
+            TAmn.GetMethod("GetSlotReference", new[] { typeof(int) })!.Invoke(node, new object[] { slotId })!;
 
-        static object? FindSlot(object node, int slotId) =>
-            TAMN.GetMethods().First(m => m.Name == "FindSlot" && m.IsGenericMethodDefinition)
+        private static object? FindSlot(object node, int slotId) =>
+            TAmn.GetMethods().First(m => m.Name == "FindSlot" && m.IsGenericMethodDefinition)
                 .MakeGenericMethod(TSlot).Invoke(node, new object[] { slotId });
 
-        static bool TryParse(Type t, string s, out object value, out string error)
+        private static bool TryParse(Type t, string s, out object value, out string error)
         {
             try { value = ParseValue(t, s); error = ""; return true; }
             catch (Exception e) { value = null!; error = $"can't parse '{s}' as {t.Name} ({e.Message})"; return false; }
         }
 
-        static object ParseValue(Type t, string s)
+        private static object ParseValue(Type t, string s)
         {
             s = s.Trim();
             if (t == typeof(bool)) return s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase);

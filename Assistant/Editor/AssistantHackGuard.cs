@@ -15,11 +15,11 @@ namespace UnityJigs.Assistant.Editor
     static class AssistantHackGuard
     {
         // Static => reset on every domain reload, so we warn once per reload while the breakage persists.
-        static readonly HashSet<string> s_Warned = new();
+        private static readonly HashSet<string> Warned = new();
 
         public static void ReportMissing(string hack, string member)
         {
-            if (!s_Warned.Add(hack)) return; // already reported this domain (the other hook beat us to it)
+            if (!Warned.Add(hack)) return; // already reported this domain (the other hook beat us to it)
             Debug.LogError(
                 $"[{hack}] OUTDATED REFLECTION: the Unity AI Assistant package is installed, but '{member}' " +
                 "could not be resolved — a package update has most likely moved, renamed, or re-scoped it, so " +

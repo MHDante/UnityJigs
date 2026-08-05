@@ -18,7 +18,7 @@ namespace UnityJigs.Assistant.Editor
     {
         // Set once the refs have actually been injected this domain; reset by the next domain reload.
         // Guards against the two hooks below both firing in one domain (which would double-inject + double-log).
-        static bool _injected;
+        private static bool _Injected;
 
         static McpAssemblyInjector()
         {
@@ -31,9 +31,9 @@ namespace UnityJigs.Assistant.Editor
             EditorApplication.delayCall += InjectPackageAssemblies;
         }
 
-        static void InjectPackageAssemblies()
+        private static void InjectPackageAssemblies()
         {
-            if (_injected) return; // already done for this domain (the other hook beat us to it)
+            if (_Injected) return; // already done for this domain (the other hook beat us to it)
             try
             {
                 // Find the RunCommandUtils type in the Unity AI Assistant assembly
@@ -83,7 +83,7 @@ namespace UnityJigs.Assistant.Editor
                 if (packageAssemblyPaths.Count == 0) return;
 
                 addRefsMethod.Invoke(builder, new object[] { packageAssemblyPaths });
-                _injected = true; // success — earlier returns leave it false so a later hook can retry
+                _Injected = true; // success — earlier returns leave it false so a later hook can retry
 
                 // Silent on success, deliberately: this runs on every domain reload, and the paths that
                 // matter already shout — AssistantHackGuard.ReportMissing above, LogWarning below.
@@ -94,7 +94,7 @@ namespace UnityJigs.Assistant.Editor
             }
         }
 
-        static List<string> GetPackageAssemblyPaths()
+        private static List<string> GetPackageAssemblyPaths()
         {
             var curatedPrefixes = new[] { "Assembly-CSharp", "UnityEngine", "UnityEditor", "Unity.", "netstandard" };
 

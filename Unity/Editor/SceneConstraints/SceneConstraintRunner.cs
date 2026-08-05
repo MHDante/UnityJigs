@@ -99,7 +99,7 @@ namespace UnityJigs.Editor.SceneConstraints
                 IReadOnlyList<TValue> values, Func<TValue, TKey> keySelector) where TValue : Object
             {
                 var ordered = SceneConstraintApply.Order(owner, values);
-                SceneConstraintApply.ApplyDict(owner, fieldName, ordered, o => (object)keySelector((TValue)o), _when);
+                SceneConstraintApply.ApplyDict(owner, fieldName, ordered, o => keySelector((TValue)o)!, _when);
             }
         }
     }
