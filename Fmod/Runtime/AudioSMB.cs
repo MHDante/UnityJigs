@@ -23,10 +23,26 @@ namespace UnityJigs.Fmod
             public readonly HashSet<int> FiredThisLoop = new();
             public readonly List<EventInstance> Instances = new();
             public int LastUpdatedFrame = -1;
+
+            // Rent-time reset: collections are cleared (keeping their backing storage) so a recycled
+            // context behaves exactly like a fresh one — including LastUpdatedFrame = -1, which keeps
+            // FindBestEntryForUpdate eligible on the entry's first frame.
+            public void Reset(float lastTime)
+            {
+                LastTime = lastTime;
+                LastUpdatedFrame = -1;
+                FiredThisLoop.Clear();
+                Instances.Clear();
+            }
         }
 
         private static int _NextEntryId;
         private readonly List<EntryContext> _entries = new();
+        // Retired contexts for reuse: state re-entry is constant during gameplay, and each context owns
+        // a HashSet + List — pooling keeps their storage instead of allocating per OnStateEnter. Static:
+        // contexts are fungible (Reset at rent wipes all state, retired instances hold only released
+        // handles), so one shared pool beats stranding warm contexts on every per-state SMB instance.
+        private static readonly Stack<EntryContext> _EntryPool = new();
 
         private AnimatorAudioHelper? _helper;
         private Rigidbody? _rigidbody;
@@ -49,10 +65,8 @@ namespace UnityJigs.Fmod
             base.OnStateEnter(animator, stateInfo, layerIndex);
             EnsureReferences(animator);
 
-            var entry = new EntryContext
-            {
-                LastTime = stateInfo.normalizedTime,
-            };
+            var entry = _EntryPool.Count > 0 ? _EntryPool.Pop() : new EntryContext();
+            entry.Reset(stateInfo.normalizedTime);
             _entries.Add(entry);
         }
 
@@ -184,13 +198,17 @@ namespace UnityJigs.Fmod
             }
 
             _entries.RemoveAt(0);
+            _EntryPool.Push(entry); // instances released above; Reset() wipes the handles on reuse
         }
 
+        // TryGetComponent: a miss returns false instead of fabricating the editor-only error string
+        // that GetComponent allocates on every failed lookup. The ?? fallback structure is preserved
+        // exactly (a helper whose Rigidbody field is unassigned still behaves as before).
         private void EnsureReferences(Animator? animator)
         {
             if (_referencesInitialized) return;
-            _helper = animator?.GetComponent<AnimatorAudioHelper>();
-            _rigidbody = _helper?.Rigidbody ?? animator?.GetComponent<Rigidbody>();
+            _helper = animator != null && animator.TryGetComponent<AnimatorAudioHelper>(out var helper) ? helper : null;
+            _rigidbody = _helper?.Rigidbody ?? (animator != null && animator.TryGetComponent<Rigidbody>(out var rb) ? rb : null);
             _referencesInitialized = true;
         }
     }

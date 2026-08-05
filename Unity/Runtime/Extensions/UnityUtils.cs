@@ -357,7 +357,7 @@ namespace UnityJigs.Extensions
                         await Awaitable.NextFrameAsync();
                         break;
                     case UpdateTimingFlags.FixedUpdate:
-                        await Awaitable.FixedUpdateAsync();
+                        await Types.LateFixedUpdateUtil.WaitAsync();
                         break;
                     case UpdateTimingFlags.LateUpdate:
                         await Awaitable.EndOfFrameAsync();

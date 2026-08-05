@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityJigs.Extensions;
 using Object = UnityEngine.Object;
 
 namespace UnityJigs.Types
@@ -19,10 +20,10 @@ namespace UnityJigs.Types
         public static bool Applies(this UpdateTimingFlags flags, Object obj, UpdateTimingFlags flag)
         {
             var isEditor = !Application.IsPlaying(obj);
-            var hasEditorFlag = flags.HasFlag(UpdateTimingFlags.InEditor);
+            var hasEditorFlag = flags.HasFlagUnsafe(UpdateTimingFlags.InEditor);
             if (isEditor && !hasEditorFlag) return false;
             if (flag == UpdateTimingFlags.Update && hasEditorFlag) return true;
-            if (flags.HasFlag(flag)) return true;
+            if (flags.HasFlagUnsafe(flag)) return true;
             return false;
         }
     }
