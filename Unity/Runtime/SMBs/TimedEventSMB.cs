@@ -16,6 +16,13 @@ namespace UnityJigs.SMBs
         protected abstract bool FireOnExitIfMissed { get; }
         [Range(0, 1)] public float ExitTime = .5f;
 
+        // How many beats this instance has already spent. Exposed because "the beat was already fired
+        // for this occupancy" is the one failure mode that is invisible from outside: OnUpdate goes
+        // quiet, nothing logs, and the symptom surfaces somewhere else entirely (a state machine that
+        // never advances, a code state that never resolves). A subclass tracing its own timing needs
+        // to see this alongside EnterCounts/ExitCounts to know WHICH guard stopped it.
+        protected int ElapseCounts => _elapseCounts;
+
         public bool AreAnyExpired()
         {
             foreach (var state in KnownStates)
