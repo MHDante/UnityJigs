@@ -150,16 +150,12 @@ namespace UnityJigs.Extensions
 
         public static bool HasParameter(this Animator animator, int id)
         {
-            var found = false;
-            for (int i = 0; i < animator.parameterCount; i++)
-            {
-                var param = animator.GetParameter(i);
-                if (param.nameHash != id) continue;
-                found = true;
-                break;
-            }
-
-            return found;
+            // One consistent snapshot: parameterCount + GetParameter(i) read different sources on an
+            // uninitialized Animator (inactive GameObject) and can throw IndexOutOfRangeException.
+            foreach (var param in animator.parameters)
+                if (param.nameHash == id)
+                    return true;
+            return false;
         }
 
         public static void DestroySafe(this Object? obj)

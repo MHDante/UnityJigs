@@ -30,6 +30,11 @@ namespace UnityJigs.Types
             if (Animator == null || Animator.runtimeAnimatorController == null)
                 return Warn("has no Animator reference, or that Animator has no controller");
 
+            // Not initialized yet (inactive GameObject / pre-Awake): its parameter list isn't queryable,
+            // so skip validation WITHOUT caching _passedCheck — the first use on a live animator still
+            // validates. The Set itself is a harmless no-op on an uninitialized animator.
+            if (!Animator.isInitialized) return Animator;
+
             // Editor-only: a build trusts the authoring and skips the lookup.
             if (Application.isEditor && !Animator.HasParameter(id))
                 return Warn("is not a parameter on the assigned Animator's controller");
