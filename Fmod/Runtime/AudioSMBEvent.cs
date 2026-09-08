@@ -20,5 +20,9 @@ namespace UnityJigs.Fmod
 
         [Tooltip("If not empty, restricts this event to specific AnimationClips in a blend tree.")]
         public List<AnimationClip> ExcludedClips = new();
+
+        [Tooltip("Fixed parameter values pushed onto the instance before it starts — one event, authored per " +
+                 "state (e.g. Tool=Gun, From=Scythe on an equip state). Empty name = skipped.")]
+        public List<FmodParam> Parameters = new();
     }
 }

@@ -129,6 +129,8 @@ namespace UnityJigs.Fmod
             }
         }
 
+        // Both branches yield an UN-STARTED instance (OnEditorPlay must return one too — the editor wires
+        // CreatePreviewInstance, not PlayEditorSound) so the authored Parameters land before the first frame.
         private void FireEvent(Animator? animator, AudioSMBEvent evt, EntryContext entry)
         {
             EventInstance instance;
@@ -149,10 +151,12 @@ namespace UnityJigs.Fmod
                     var targetTransform = _helper?.AudioOrigin != null ? _helper.AudioOrigin : animator.transform;
                     instance.AttachTo(targetTransform.gameObject);
                 }
-
-                instance.start();
             }
 
+            for (var i = 0; i < evt.Parameters.Count; i++)
+                evt.Parameters[i].SetOn(instance, evt.Parameters[i].Value);
+
+            instance.start();
             entry.Instances.Add(instance);
         }
 

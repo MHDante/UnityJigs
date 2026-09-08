@@ -15,7 +15,8 @@ namespace UnityJigs.Fmod.Editor
     [CustomEditor(typeof(AudioSMB), true)]
     public class AudioSMBEditor : OdinEditor, IMarkerTrackSource
     {
-        static AudioSMBEditor() => AudioSMB.OnEditorPlay = FmodEditorUtils.PlayEditorSound;
+        // Un-started preview instance: AudioSMB.FireEvent applies the event's Parameters, then starts it.
+        static AudioSMBEditor() => AudioSMB.OnEditorPlay = FmodEditorUtils.CreatePreviewInstance;
 
         public AudioSMB AudioSMB => (AudioSMB)target;
         private readonly List<AnimationClip> _clips = new();
@@ -198,6 +199,7 @@ namespace UnityJigs.Fmod.Editor
                     var audioEventProp = prop.Children["AudioEvent"];
                     audioEventProp?.Draw();
 
+                    DrawParameters(AudioSMB.Events[idx]);
 
                     SirenixEditorGUI.EndBox();
                 }
@@ -229,6 +231,84 @@ namespace UnityJigs.Fmod.Editor
 
             // Draw the clip inclusion table
             DrawClipInclusionTable();
+        }
+
+        // Hand-drawn (like the clip table): the Events list is hidden from Odin, so the per-event Parameters
+        // list is drawn here — a name dropdown from the event's parameter metadata, the matching value control
+        // (slider / label popup), and add/remove. Values are fixed per state; see AudioSMBEvent.Parameters.
+        private void DrawParameters(AudioSMBEvent evt)
+        {
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Parameters", EditorStyles.miniBoldLabel);
+
+            var metas = evt.AudioEvent.IsNull
+                ? new List<FmodParameterMeta>()
+                : FmodParameterMetadataCache.GetParameters(evt.AudioEvent);
+            var hasReal = metas.Count > 0 && metas[0].Name != "<no parameters>";
+            var names = hasReal ? metas.Select(m => m.Name).ToArray() : System.Array.Empty<string>();
+
+            for (var i = 0; i < evt.Parameters.Count; i++)
+            {
+                var p = evt.Parameters[i];
+                EditorGUILayout.BeginHorizontal();
+
+                var nameIndex = System.Array.IndexOf(names, p.Name);
+                if (hasReal)
+                {
+                    var next = EditorGUILayout.Popup(Mathf.Max(0, nameIndex), names, GUILayout.Width(140));
+                    if (next != nameIndex && next >= 0 && next < names.Length)
+                    {
+                        Undo.RecordObject(AudioSMB, "Set Parameter");
+                        p.Name = names[next];
+                        nameIndex = next;
+                    }
+                }
+                else
+                {
+                    var typed = EditorGUILayout.TextField(p.Name ?? "", GUILayout.Width(140));
+                    if (typed != p.Name) { Undo.RecordObject(AudioSMB, "Set Parameter"); p.Name = typed; }
+                }
+
+                float value;
+                if (nameIndex >= 0 && nameIndex < metas.Count)
+                {
+                    var rect = EditorGUILayout.GetControlRect();
+                    value = FmodParameterRefDrawer.DrawValueField(rect, metas[nameIndex], p.Value);
+                }
+                else value = EditorGUILayout.FloatField(p.Value);
+
+                if (!Mathf.Approximately(value, p.Value))
+                {
+                    Undo.RecordObject(AudioSMB, "Set Parameter");
+                    p.Value = value;
+                }
+
+                var remove = GUILayout.Button("-", GUILayout.Width(22));
+                EditorGUILayout.EndHorizontal();
+
+                if (remove)
+                {
+                    Undo.RecordObject(AudioSMB, "Remove Parameter");
+                    evt.Parameters.RemoveAt(i);
+                    EditorUtility.SetDirty(AudioSMB);
+                    GUIUtility.ExitGUI();
+                }
+
+                evt.Parameters[i] = p; // FmodParam is a struct — write back
+            }
+
+            if (GUILayout.Button("Add Parameter", GUILayout.Width(120)))
+            {
+                Undo.RecordObject(AudioSMB, "Add Parameter");
+                evt.Parameters.Add(new FmodParam
+                {
+                    Name = hasReal ? names[0] : "",
+                    Value = hasReal ? metas[0].Default : 0f,
+                });
+                EditorUtility.SetDirty(AudioSMB);
+            }
+
+            if (GUI.changed) EditorUtility.SetDirty(AudioSMB);
         }
 
         private void DrawClipInclusionTable()
