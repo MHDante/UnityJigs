@@ -1,6 +1,7 @@
 using System;
 using Unity.AI.MCP.Editor.Helpers;
 using Unity.AI.MCP.Editor.ToolRegistry;
+using UnityJigs.Tooling.Editor;
 
 namespace UnityJigs.Assistant.Editor
 {

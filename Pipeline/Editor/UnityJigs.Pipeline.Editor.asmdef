@@ -1,9 +1,10 @@
 {
-    "name": "UnityJigs.Assistant.Editor",
-    "rootNamespace": "UnityJigs.Assistant.Editor",
+    "name": "UnityJigs.Pipeline.Editor",
+    "rootNamespace": "UnityJigs.Pipeline.Editor",
     "references": [
-        "GUID:2aae799fca8f4493ca5058f7a1210dd1",
-        "GUID:e6ca4e6c03734001852478c8cd74aa2b"
+        "GUID:e6ca4e6c03734001852478c8cd74aa2b",
+        "GUID:71e9815631ba2574b92564e93b8efc9c",
+        "GUID:a3ca9b2d97442e0499ea28b681f751d9"
     ],
     "includePlatforms": [
         "Editor"
@@ -14,7 +15,7 @@
     "precompiledReferences": [],
     "autoReferenced": false,
     "defineConstraints": [
-        "UNITYJIGS_ASSISTANT"
+        "UNITYJIGS_PIPELINE"
     ],
     "versionDefines": [],
     "noEngineReferences": false

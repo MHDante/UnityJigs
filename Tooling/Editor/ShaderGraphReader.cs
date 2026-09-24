@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace UnityJigs.Assistant.Editor
+namespace UnityJigs.Tooling.Editor
 {
     /// Turns a ShaderGraph into compact, token-efficient pseudo-shadercode: properties become
     /// uniforms, the active master-stack blocks (or a subgraph's outputs) are the per-stage outputs,

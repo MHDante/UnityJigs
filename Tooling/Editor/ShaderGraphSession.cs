@@ -7,11 +7,11 @@ using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
-using static UnityJigs.Assistant.Editor.SgReflection;
+using static UnityJigs.Tooling.Editor.SgReflection;
 
-namespace UnityJigs.Assistant.Editor
+namespace UnityJigs.Tooling.Editor
 {
-    /// A live editing session over a .shadergraph, meant to be driven from Unity_RunCommand.
+    /// A live editing session over a .shadergraph, meant to be driven from Unity_RunCommand or `unity command eval`.
     /// Open() loads the real internal GraphData; every mutator goes through the real model (so node
     /// objectIds and slot wiring can never be corrupted); Save() re-serializes via MultiJson. Use
     /// Snapshot()/Decompile() to navigate and preview between edits. Call <see cref="Help"/> for usage.
@@ -955,12 +955,12 @@ namespace UnityJigs.Assistant.Editor
             throw new NotSupportedException($"unsupported value type {t.Name}");
         }
 
-        /// One-screen cheatsheet for a fresh agent driving this from RunCommand.
-        public static string Help() => @"ShaderGraph editing API (UnityJigs.Assistant.Editor) — drive from Unity_RunCommand.
+        /// One-screen cheatsheet for a fresh agent driving this from RunCommand or Pipeline eval.
+        public static string Help() => @"ShaderGraph editing API (UnityJigs.Tooling.Editor) — drive from Unity_RunCommand or `unity command eval`.
 
 READ (token-efficient, no session needed):
   ShaderGraphReader.Decompile(path)            -> pseudo-shadercode string
-  (or the MCP tool Unity_ShaderGraphRead)
+  (or the MCP tool Unity_ShaderGraphRead / the CLI command shadergraph_read)
 
 EDIT (session — mutate the real model, then Save once):
   var s = ShaderGraphSession.Open(path);       // loads live GraphData

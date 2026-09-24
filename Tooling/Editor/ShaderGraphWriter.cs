@@ -5,9 +5,9 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using static UnityJigs.Assistant.Editor.SgReflection;
+using static UnityJigs.Tooling.Editor.SgReflection;
 
-namespace UnityJigs.Assistant.Editor
+namespace UnityJigs.Tooling.Editor
 {
     /// Safe mutation of .shadergraph files. The pattern is always: deserialize the live internal
     /// GraphData, mutate it through the real model, then re-serialize via MultiJson — so the written

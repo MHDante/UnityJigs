@@ -7,7 +7,7 @@ using System.Reflection;
 using System.Text;
 using UnityEditor;
 
-namespace UnityJigs.Assistant.Editor
+namespace UnityJigs.Tooling.Editor
 {
     /// A plain, reflection-free snapshot of a ShaderGraph, extracted from Unity's
     /// internal <c>GraphData</c> model. The emitter works only against these POCOs.
