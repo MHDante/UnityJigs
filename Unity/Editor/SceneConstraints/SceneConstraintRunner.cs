@@ -75,7 +75,16 @@ namespace UnityJigs.Editor.SceneConstraints
         private class BuildStep : IProcessSceneWithReport
         {
             public int callbackOrder => 0;
-            public void OnProcessScene(Scene scene, BuildReport report) => Run(scene, "build");
+
+            // Unity also calls this in the editor for every scene loaded in play mode (report == null),
+            // after that scene's Awake has run, so it would validate runtime state (spawned clones,
+            // mid-animation transforms) as if it were authored. The "play" hook already covers
+            // authored data on entering play mode, so only run here during a real player build.
+            public void OnProcessScene(Scene scene, BuildReport report)
+            {
+                if (report == null || !BuildPipeline.isBuildingPlayer) return;
+                Run(scene, "build");
+            }
         }
 
         // ------------------------------------------------------------------------------------------------
