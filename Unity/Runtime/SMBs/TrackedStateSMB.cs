@@ -36,7 +36,10 @@ namespace UnityJigs.SMBs
             base.OnStateUpdate(animator, stateInfo, layerIndex, controller);
             _updateCount = _frame != Time.frameCount ? 0 : _updateCount + 1;
             _frame = Time.frameCount;
-            KnownStates[_updateCount] = stateInfo;
+            // An update for a state whose enter we never saw (Unity can skip OnStateEnter, e.g. when the animator
+            // transitions on its very first evaluation): start tracking it instead of indexing past the list.
+            if (_updateCount < KnownStates.Count) KnownStates[_updateCount] = stateInfo;
+            else KnownStates.Add(stateInfo);
             OnUpdate(animator, stateInfo, layerIndex, controller);
         }
 
@@ -44,7 +47,10 @@ namespace UnityJigs.SMBs
             AnimatorControllerPlayable controller)
         {
             base.OnStateExit(animator, stateInfo, layerIndex, controller);
-            KnownStates.RemoveAt(0);
+            if (KnownStates.Count > 0) KnownStates.RemoveAt(0);
+            // An exit with no matching enter (see OnStateUpdate): nothing opened, so nothing closes — counting it would
+            // also skew isOverlap for every later entry.
+            if (EnterCounts <= ExitCounts) return;
             ExitCounts++;
             var isOverlap = EnterCounts > ExitCounts;
             OnExit(animator, stateInfo, layerIndex, controller, isOverlap);
