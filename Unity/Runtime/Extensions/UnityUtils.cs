@@ -113,8 +113,8 @@ namespace UnityJigs.Extensions
         {
 #if UNITY_EDITOR
             if (singletonField) return singletonField;
-            var candidate = PlayerSettings.GetPreloadedAssets().OfType<T>().First();
-            if (!candidate) throw new FileNotFoundException("Could Not Find object of type T in Preloaded Assets");
+            var candidate = PlayerSettings.GetPreloadedAssets().OfType<T>().FirstOrDefault();
+            if (!candidate) throw new FileNotFoundException($"Could not find a {typeof(T).Name} in Preloaded Assets (Player Settings).");
             singletonField = candidate;
 #endif
             return singletonField;
