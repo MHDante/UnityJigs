@@ -1,0 +1,2 @@
+# Shell scripts (Lanes~): sh can't read CRLF
+*.sh text eol=lf
