@@ -88,7 +88,14 @@ namespace UnityJigs.Geometry
 
         public int FillDisc(Vector2 center, float radius, byte v)
         {
-            var changed = 0;
+            Scratch.Clear();
+            CellsInDisc(center, radius, Scratch);
+            return Set(Scratch, v);
+        }
+
+        /// <summary>The indices (y · Width + x) of the cells whose centre lies within `radius` of `center`.</summary>
+        public void CellsInDisc(Vector2 center, float radius, List<int> into)
+        {
             var r2 = radius * radius;
             var x0 = Mathf.Max(0, Mathf.FloorToInt(center.x - radius));
             var x1 = Mathf.Min(_width - 1, Mathf.CeilToInt(center.x + radius));
@@ -99,13 +106,8 @@ namespace UnityJigs.Geometry
             {
                 var dx = x + 0.5f - center.x;
                 var dy = y + 0.5f - center.y;
-                if (dx * dx + dy * dy > r2) continue;
-                var i = y * _width + x;
-                if (_bits[i] == v) continue;
-                _bits[i] = v;
-                changed++;
+                if (dx * dx + dy * dy <= r2) into.Add(y * _width + x);
             }
-            return changed;
         }
 
         /// <summary>
@@ -117,8 +119,15 @@ namespace UnityJigs.Geometry
 
         public int FillPolygon(IReadOnlyList<Vector2> polygon, byte v)
         {
-            if (polygon.Count < 3) return 0;
-            var changed = 0;
+            Scratch.Clear();
+            CellsInPolygon(polygon, Scratch);
+            return Set(Scratch, v);
+        }
+
+        /// <summary>The indices of the cells whose centre lies inside the closed polygon (even-odd rule).</summary>
+        public void CellsInPolygon(IReadOnlyList<Vector2> polygon, List<int> into)
+        {
+            if (polygon.Count < 3) return;
             var minY = float.MaxValue;
             var maxY = float.MinValue;
             foreach (var p in polygon)
@@ -146,16 +155,9 @@ namespace UnityJigs.Geometry
                     // cells whose centre x + 0.5 lies in [xs[k], xs[k+1])
                     var xa = Mathf.Max(0, Mathf.CeilToInt(xs[k] - 0.5f));
                     var xb = Mathf.Min(_width - 1, Mathf.CeilToInt(xs[k + 1] - 0.5f) - 1);
-                    for (var x = xa; x <= xb; x++)
-                    {
-                        var idx = y * _width + x;
-                        if (_bits[idx] == v) continue;
-                        _bits[idx] = v;
-                        changed++;
-                    }
+                    for (var x = xa; x <= xb; x++) into.Add(y * _width + x);
                 }
             }
-            return changed;
         }
 
         /// <summary>
@@ -166,18 +168,26 @@ namespace UnityJigs.Geometry
 
         public int FloodFill(int x, int y, byte v)
         {
-            if (!InBounds(x, y)) return 0;
+            if (!InBounds(x, y) || _bits[y * _width + x] == v) return 0;
+            Scratch.Clear();
+            Region(x, y, Scratch);
+            return Set(Scratch, v);
+        }
+
+        /// <summary>The indices of the 4-connected region of cells holding (x, y)'s exact value (empty out of bounds).</summary>
+        public void Region(int x, int y, List<int> into)
+        {
+            if (!InBounds(x, y)) return;
             var from = _bits[y * _width + x];
-            if (from == v) return 0;
-            var changed = 0;
+            var seen = new bool[_bits.Length];
             var stack = new Stack<int>();
             stack.Push(y * _width + x);
             while (stack.Count > 0)
             {
                 var i = stack.Pop();
-                if (_bits[i] != from) continue;
-                _bits[i] = v;
-                changed++;
+                if (seen[i] || _bits[i] != from) continue;
+                seen[i] = true;
+                into.Add(i);
                 var cx = i % _width;
                 var cy = i / _width;
                 if (cx > 0) stack.Push(i - 1);
@@ -185,8 +195,23 @@ namespace UnityJigs.Geometry
                 if (cy > 0) stack.Push(i - _width);
                 if (cy < _height - 1) stack.Push(i + _width);
             }
+        }
+
+        /// <summary>Sets the listed cells (indices) to `v`. Returns cells changed.</summary>
+        public int Set(List<int> cells, byte v)
+        {
+            var changed = 0;
+            foreach (var i in cells)
+            {
+                if (_bits[i] == v) continue;
+                _bits[i] = v;
+                changed++;
+            }
             return changed;
         }
+
+        // The fills' working list (editor-time painting; not thread-safe).
+        private static readonly List<int> Scratch = new();
 
         /// <summary>
         /// Canvas resize: a new mask of `width` × `height` where new cell (x, y) = old cell (x + offsetX, y + offsetY);
