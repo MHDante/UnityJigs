@@ -150,6 +150,24 @@ namespace UnityJigs.Tests
             Assert.IsTrue(grown[12, 12] == m[10, 10]);
         }
 
+        [Test]
+        public void PaletteValues()
+        {
+            var m = new BitMask(10, 10, true);
+            m.FillDisc(new Vector2(3, 3), 2, (byte)5);
+            var fives = 0;
+            foreach (var b in m.Bits) if (b == 5) fives++;
+            Assert.Greater(fives, 0);
+            Assert.AreEqual(100, m.Count); // every cell is on, whatever its value
+            Assert.IsTrue(m[3, 3]);
+            Assert.AreEqual(5, m.GetValue(3, 3));
+            // The bucket fills the start cell's exact value only: the 1-region around the 5s.
+            Assert.AreEqual(100 - fives, m.FloodFill(9, 9, (byte)7));
+            Assert.AreEqual(5, m.GetValue(3, 3));
+            Assert.AreEqual(7, m.Resized(12, 12, -1, -1, (byte)2).GetValue(10, 10));
+            Assert.AreEqual(2, m.Resized(12, 12, -1, -1, (byte)2).GetValue(0, 0));
+        }
+
         // Every triangle's geometric normal (Unity: cross(b−a, c−a)) must agree with its vertex normal.
         private static void AssertWindingMatchesNormals(Mesh mesh)
         {

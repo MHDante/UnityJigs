@@ -5,9 +5,11 @@ using UnityEngine;
 namespace UnityJigs.Geometry
 {
     /// <summary>
-    /// A 2D grid of on/off cells (one byte per cell, 0 or 1), x right, y up. Cell (x, y) covers the square
-    /// [x, x+1] × [y, y+1] in cell space. The painting primitives (disc, polygon, flood fill) and the canvas resize
-    /// all work in cell space; callers own the mapping to the world.
+    /// A 2D grid of cells, one byte each, x right, y up: 0 = off, any other value = on. The bool API reads "non-zero"
+    /// and writes 1; the byte API (<see cref="GetValue"/>, the painting primitives' byte overloads) keeps the value, so
+    /// a mask can carry a small palette (e.g. which style a cell is) while every on/off consumer still works.
+    /// Cell (x, y) covers the square [x, x+1] × [y, y+1] in cell space. The painting primitives (disc, polygon, flood
+    /// fill) and the canvas resize all work in cell space; callers own the mapping to the world.
     /// </summary>
     [Serializable]
     public class BitMask
@@ -46,12 +48,22 @@ namespace UnityJigs.Geometry
             }
         }
 
+        /// <summary>The cell's value (0 out of bounds).</summary>
+        public byte GetValue(int x, int y) => InBounds(x, y) ? _bits[y * _width + x] : (byte)0;
+
+        public void SetValue(int x, int y, byte value)
+        {
+            if (InBounds(x, y)) _bits[y * _width + x] = value;
+        }
+
+        /// <summary>The number of on (non-zero) cells.</summary>
         public int Count
         {
             get
             {
                 var n = 0;
-                foreach (var b in _bits) n += b;
+                foreach (var b in _bits)
+                    if (b != 0) n++;
                 return n;
             }
         }
@@ -64,14 +76,17 @@ namespace UnityJigs.Geometry
             return true;
         }
 
-        public void Fill(bool value)
+        public void Fill(bool value) => Fill(value ? (byte)1 : (byte)0);
+
+        public void Fill(byte value)
         {
-            var v = value ? (byte)1 : (byte)0;
-            for (var i = 0; i < _bits.Length; i++) _bits[i] = v;
+            for (var i = 0; i < _bits.Length; i++) _bits[i] = value;
         }
 
         /// <summary>Sets every cell whose centre lies within `radius` of `center` (cell space). Returns cells changed.</summary>
-        public int FillDisc(Vector2 center, float radius, bool value)
+        public int FillDisc(Vector2 center, float radius, bool value) => FillDisc(center, radius, value ? (byte)1 : (byte)0);
+
+        public int FillDisc(Vector2 center, float radius, byte v)
         {
             var changed = 0;
             var r2 = radius * radius;
@@ -79,7 +94,6 @@ namespace UnityJigs.Geometry
             var x1 = Mathf.Min(_width - 1, Mathf.CeilToInt(center.x + radius));
             var y0 = Mathf.Max(0, Mathf.FloorToInt(center.y - radius));
             var y1 = Mathf.Min(_height - 1, Mathf.CeilToInt(center.y + radius));
-            var v = value ? (byte)1 : (byte)0;
             for (var y = y0; y <= y1; y++)
             for (var x = x0; x <= x1; x++)
             {
@@ -98,11 +112,13 @@ namespace UnityJigs.Geometry
         /// Sets every cell whose centre lies inside the closed polygon (cell space, even-odd rule; either winding).
         /// Returns cells changed.
         /// </summary>
-        public int FillPolygon(IReadOnlyList<Vector2> polygon, bool value)
+        public int FillPolygon(IReadOnlyList<Vector2> polygon, bool value) =>
+            FillPolygon(polygon, value ? (byte)1 : (byte)0);
+
+        public int FillPolygon(IReadOnlyList<Vector2> polygon, byte v)
         {
             if (polygon.Count < 3) return 0;
             var changed = 0;
-            var v = value ? (byte)1 : (byte)0;
             var minY = float.MaxValue;
             var maxY = float.MinValue;
             foreach (var p in polygon)
@@ -142,11 +158,15 @@ namespace UnityJigs.Geometry
             return changed;
         }
 
-        /// <summary>4-connected flood fill from (x, y) with `value`. Returns cells changed (0 if already `value`).</summary>
-        public int FloodFill(int x, int y, bool value)
+        /// <summary>
+        /// 4-connected flood fill from (x, y) with `value`: the region of cells holding the start cell's exact value.
+        /// Returns cells changed (0 if already `value`).
+        /// </summary>
+        public int FloodFill(int x, int y, bool value) => FloodFill(x, y, value ? (byte)1 : (byte)0);
+
+        public int FloodFill(int x, int y, byte v)
         {
             if (!InBounds(x, y)) return 0;
-            var v = value ? (byte)1 : (byte)0;
             var from = _bits[y * _width + x];
             if (from == v) return 0;
             var changed = 0;
@@ -172,9 +192,13 @@ namespace UnityJigs.Geometry
         /// Canvas resize: a new mask of `width` × `height` where new cell (x, y) = old cell (x + offsetX, y + offsetY);
         /// cells outside the old mask get `fill`. Content never moves relative to the old origin + offset.
         /// </summary>
-        public BitMask Resized(int width, int height, int offsetX, int offsetY, bool fill = false)
+        public BitMask Resized(int width, int height, int offsetX, int offsetY, bool fill = false) =>
+            Resized(width, height, offsetX, offsetY, fill ? (byte)1 : (byte)0);
+
+        public BitMask Resized(int width, int height, int offsetX, int offsetY, byte fill)
         {
-            var result = new BitMask(width, height, fill);
+            var result = new BitMask(width, height);
+            if (fill != 0) result.Fill(fill);
             for (var y = 0; y < result._height; y++)
             for (var x = 0; x < result._width; x++)
             {
@@ -187,7 +211,7 @@ namespace UnityJigs.Geometry
 
         /// <summary>
         /// Removes every saddle (a 2×2 block where exactly two diagonal cells are set) by setting one of the two unset
-        /// cells, repeating until none remain. After this, traced loops never share a vertex (each is simple and
+        /// cells (to the value of the set cell above it), repeating until none remain. After this, traced loops never share a vertex (each is simple and
         /// vertex-disjoint from the others). Returns cells set.
         /// </summary>
         public int FillSaddles()
@@ -204,8 +228,8 @@ namespace UnityJigs.Geometry
                     var b = this[x + 1, y];
                     var c = this[x, y + 1];
                     var d = this[x + 1, y + 1];
-                    if (a && d && !b && !c) { this[x + 1, y] = true; changed++; }
-                    else if (b && c && !a && !d) { this[x, y] = true; changed++; }
+                    if (a && d && !b && !c) { SetValue(x + 1, y, GetValue(x + 1, y + 1)); changed++; }
+                    else if (b && c && !a && !d) { SetValue(x, y, GetValue(x, y + 1)); changed++; }
                 }
                 total += changed;
             } while (changed > 0);
