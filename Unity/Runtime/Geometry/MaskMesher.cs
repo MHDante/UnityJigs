@@ -8,7 +8,7 @@ namespace UnityJigs.Geometry
     /// Turns a <see cref="BitMask"/> into a horizontal slab mesh: the set cells' outline, simplified to `roughness`
     /// (faceted — no smoothing), triangulated on top, mirrored underneath, joined by walls along every outer and
     /// hole edge. Mesh space: cell (x, y) of the mask covers [origin + (x, y)·cellSize, +cellSize] on the XZ plane;
-    /// the top face is at y = 0, the bottom at y = −thickness. Faces have split normals; uv0 = (x, z).
+    /// the top face is at y = 0, the bottom at y = −thickness. Faces have split normals and tangents; uv0 = (x, z).
     /// </summary>
     public static class MaskMesher
     {
@@ -169,6 +169,7 @@ namespace UnityJigs.Geometry
             mesh.SetNormals(normals);
             mesh.SetUVs(0, uvs);
             mesh.SetTriangles(tris, 0);
+            mesh.RecalculateTangents(); // normal-mapped materials (URP/Lit) need them
             mesh.RecalculateBounds();
             result.Vertices = verts.Count;
             result.Triangles = tris.Count / 3;
