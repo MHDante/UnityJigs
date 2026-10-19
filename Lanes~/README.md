@@ -32,7 +32,8 @@ repository (it finds the main checkout through git; or pass `-Repo <path>`).
      whether to create one (`lane.ps1 new <next letter>`: a few minutes and the Library's size on disk).
    - A held lane you asked for by name exits 2 and names its holder.
 3. **Read the lane's memory file** (`lane_<id>.md` in the repo's Claude memory folder, indexed in
-   MEMORY.md). It may hold uncommitted work a previous holder left on purpose: a handoff. Then
+   MEMORY.md: the folder Claude Code reads — `autoMemoryDirectory` when local or user settings set it, else
+   `<CLAUDE_CONFIG_DIR or ~/.claude>/projects/<repo key>/memory`; `lane.ps1` resolves it the same way). It may hold uncommitted work a previous holder left on purpose: a handoff. Then
    `git -C <lane root> status -sb`, and check the editor (`lane.ps1 status`): closed → `lane.ps1 open <id>`
    and wait for `unity status` to say `ready`.
 4. **Tell the user which lane you're in**, in one line ("Working in **lane B**"), so they can `/rename`

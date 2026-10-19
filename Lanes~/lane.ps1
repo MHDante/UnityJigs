@@ -76,8 +76,29 @@ $unity = Join-Path $env:LOCALAPPDATA 'Unity\bin\unity.exe'
 $laneIds = if ($laneAFirst) { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' } else { 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' }
 $allIds = 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'
 
-# Claude Code keys a repository's memory folder by its path, non-alphanumerics as '-'.
-$memoryDir = Join-Path $env:USERPROFILE ".claude\projects\$($repoRoot -replace '[^A-Za-z0-9]', '-')\memory"
+# The memory folder Claude Code reads for this repository, found the way Claude Code finds it:
+#   1. autoMemoryDirectory from local settings (<repo>/.claude/settings.local.json, then the Unity project's), then the
+#      user's settings (<config dir>/settings.json) — a session manager may point it anywhere;
+#   2. else <config dir>/projects/<repo path, non-alphanumerics as '-'>/memory.
+# The config dir is $env:CLAUDE_CONFIG_DIR when set (a session runs this script with it set), else ~/.claude. Run by
+# hand from a plain terminal, a custom config dir is unknown: set CLAUDE_CONFIG_DIR, or the default is used.
+function Resolve-MemoryDir {
+    $configDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }
+    $candidates = @(
+        (Join-Path $repoRoot '.claude\settings.local.json')
+        $(if ($unityProject) { Join-Path (Join-Path $repoRoot $unityProject) '.claude\settings.local.json' })
+        (Join-Path $configDir 'settings.json')
+    )
+    foreach ($file in $candidates) {
+        if (-not $file -or -not (Test-Path $file)) { continue }
+        try { $dir = (Get-Content $file -Raw | ConvertFrom-Json).autoMemoryDirectory } catch { continue }
+        if (-not $dir) { continue }
+        if ($dir.StartsWith('~')) { $dir = Join-Path $env:USERPROFILE $dir.Substring(1).TrimStart('/', [char]92) }
+        return [IO.Path]::GetFullPath($dir)
+    }
+    Join-Path $configDir "projects\$($repoRoot -replace '[^A-Za-z0-9]', '-')\memory"
+}
+$memoryDir = Resolve-MemoryDir
 
 function Lane-Root([string]$id) { if ($id -eq 'a') { $repoRoot } else { Join-Path $worktreeRoot "$repoName-$id" } }
 function Lane-Project([string]$id) { if ($unityProject) { Join-Path (Lane-Root $id) $unityProject } else { Lane-Root $id } }
