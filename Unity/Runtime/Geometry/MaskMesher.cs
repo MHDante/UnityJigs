@@ -12,6 +12,15 @@ namespace UnityJigs.Geometry
     /// </summary>
     public static class MaskMesher
     {
+        /// <summary>
+        /// An outline edit between the trace and the simplification (e.g. cutting the outline at a boundary). `loops` are
+        /// the traced loops in mesh space, set cells on each loop's left (outers counter-clockwise, holes clockwise); change
+        /// or replace them freely, keeping that orientation. `pinned` runs parallel to `loops` (all false on entry):
+        /// `pinned[i][j]` marks `loops[i][j]` as a point the simplification must keep — such a loop is simplified chain by
+        /// chain between its pinned points, so a cut stays exactly where it was made. Keep the two lists parallel.
+        /// </summary>
+        public delegate void OutlineEdit(List<List<Vector2>> loops, List<List<bool>> pinned);
+
         public struct Result
         {
             public bool Success;
@@ -27,7 +36,12 @@ namespace UnityJigs.Geometry
 
         /// <summary>Builds into `mesh` (cleared first). An empty mask gives an empty mesh and Success.</summary>
         public static Result Build(BitMask mask, float cellSize, Vector2 origin, float roughness, float thickness, Mesh mesh,
-            float minLoopAreaCells = 1.5f)
+            float minLoopAreaCells = 1.5f) =>
+            Build(mask, cellSize, origin, roughness, thickness, mesh, null, minLoopAreaCells);
+
+        /// <summary>As above, with `edit` (may be null) applied to the traced loops before they are simplified.</summary>
+        public static Result Build(BitMask mask, float cellSize, Vector2 origin, float roughness, float thickness, Mesh mesh,
+            OutlineEdit? edit, float minLoopAreaCells = 1.5f)
         {
             var result = new Result();
             var work = new BitMask(mask);
@@ -38,6 +52,13 @@ namespace UnityJigs.Geometry
             foreach (var loop in raw)
                 for (var i = 0; i < loop.Count; i++)
                     loop[i] = origin + loop[i] * cellSize;
+            List<List<bool>>? pinned = null;
+            if (edit != null)
+            {
+                pinned = new List<List<bool>>(raw.Count);
+                foreach (var loop in raw) pinned.Add(new List<bool>(new bool[loop.Count]));
+                edit(raw, pinned);
+            }
 
             var minArea = minLoopAreaCells * cellSize * cellSize;
             var eps = Mathf.Max(0f, roughness);
@@ -49,7 +70,7 @@ namespace UnityJigs.Geometry
                 loops.Clear();
                 vertices2.Clear();
                 triangles.Clear();
-                if (TryBuild(raw, eps, minArea, loops, vertices2, triangles, ref result)) break;
+                if (TryBuild(raw, pinned, eps, minArea, loops, vertices2, triangles, ref result)) break;
                 if (eps <= 0f)
                 {
                     result.Success = false;
@@ -64,13 +85,15 @@ namespace UnityJigs.Geometry
             return result;
         }
 
-        private static bool TryBuild(List<List<Vector2>> raw, float eps, float minArea, List<List<Vector2>> loops,
-            List<Vector2> vertices2, List<int> triangles, ref Result result)
+        private static bool TryBuild(List<List<Vector2>> raw, List<List<bool>>? pinned, float eps, float minArea,
+            List<List<Vector2>> loops, List<Vector2> vertices2, List<int> triangles, ref Result result)
         {
-            foreach (var loop in raw)
+            for (var r = 0; r < raw.Count; r++)
             {
+                var loop = raw[r];
                 var simple = new List<Vector2>();
-                PolygonSimplify.SimplifyClosed(loop, eps, simple);
+                if (pinned != null) PolygonSimplify.SimplifyClosed(loop, pinned[r], eps, simple);
+                else PolygonSimplify.SimplifyClosed(loop, eps, simple);
                 if (simple.Count < 3) continue;
                 if (Mathf.Abs(PolygonTriangulator.SignedArea(simple)) < minArea) continue;
                 // Simplification must not flip a loop's winding (an outer stays CCW, a hole CW).

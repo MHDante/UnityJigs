@@ -36,6 +36,64 @@ namespace UnityJigs.Geometry
                 if (keep[i]) result.Add(loop[i]);
         }
 
+        /// <summary>
+        /// As above, keeping every point whose `pinned` flag is set: the loop is simplified chain by chain between its
+        /// pinned points (each chain's ends kept). No pinned point: exactly the plain closed simplification.
+        /// </summary>
+        public static void SimplifyClosed(IReadOnlyList<Vector2> loop, IReadOnlyList<bool> pinned, float epsilon,
+            List<Vector2> result)
+        {
+            var first = -1;
+            for (var i = 0; i < pinned.Count && first < 0; i++)
+                if (pinned[i]) first = i;
+            if (first < 0)
+            {
+                SimplifyClosed(loop, epsilon, result);
+                return;
+            }
+            result.Clear();
+            var n = loop.Count;
+            var start = first;
+            do
+            {
+                var end = start + 1;
+                while (!pinned[end % n]) end++;
+                result.Add(loop[start % n]);
+                if (epsilon > 0f && end - start >= 2)
+                {
+                    var keep = new bool[end - start + 1];
+                    Chain(loop, start, end, epsilon, keep, start);
+                    for (var i = 1; i < keep.Length - 1; i++)
+                        if (keep[i]) result.Add(loop[(start + i) % n]);
+                }
+                else
+                    for (var i = start + 1; i < end; i++) result.Add(loop[i % n]);
+                start = end;
+            } while (start % n != first);
+        }
+
+        // Douglas–Peucker on loop[a..b] (indices past the end wrap); keep[i − offset] marks the points kept.
+        private static void Chain(IReadOnlyList<Vector2> loop, int a, int b, float epsilon, bool[] keep, int offset)
+        {
+            var n = loop.Count;
+            if (b - a < 2) return;
+            var pa = loop[a % n];
+            var pb = loop[b % n];
+            var best = -1;
+            var bestD = epsilon;
+            for (var i = a + 1; i < b; i++)
+            {
+                var d = DistanceToSegment(loop[i % n], pa, pb);
+                if (d <= bestD) continue;
+                bestD = d;
+                best = i;
+            }
+            if (best < 0) return;
+            keep[best - offset] = true;
+            Chain(loop, a, best, epsilon, keep, offset);
+            Chain(loop, best, b, epsilon, keep, offset);
+        }
+
         // Marks points strictly between a and b (b may equal n = wrap to 0) whose distance exceeds epsilon.
         private static void Recurse(IReadOnlyList<Vector2> loop, int a, int b, float epsilon, bool[] keep)
         {
