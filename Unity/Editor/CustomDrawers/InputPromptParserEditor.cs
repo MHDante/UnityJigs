@@ -93,7 +93,7 @@ namespace UnityJigs.Editor.CustomDrawers
             var imageFilePath = Path.Join(parentPath, relativeImagePath);
             var importer = AssetImporter.GetAtPath(imageFilePath) as TextureImporter;
             if (importer == null) throw new Exception("Bad image path: " + imageFilePath);
-            importer.isReadable = true;
+            // Read/Write stays as imported: slicing needs no CPU pixels, and a readable sheet keeps a CPU copy in builds.
 
             var metadata = new List<SpriteMetaData>();
 
