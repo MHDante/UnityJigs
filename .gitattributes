@@ -1,2 +1,4 @@
 # Shell scripts (Lanes~): sh can't read CRLF
 *.sh text eol=lf
+# Git hooks (Lanes~/githooks): extension-less shell scripts
+Lanes~/githooks/* text eol=lf

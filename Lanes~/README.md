@@ -173,9 +173,24 @@ Nothing here is imposed on a repo: read it, then adapt. A typical setup:
    conflict gets ordinary git markers on just the conflicting lines.
 5. **Saves:** route the game's save folder through `Lane.SaveFolder` and editor save state through
    `Lane.Key`.
-6. **Never pushing lane branches:** a pre-push hook that refuses `refs/heads/lane-[a-j]` (local or remote
-   ref) and then runs `git lfs pre-push` with the same input. On the user's machines it is global
-   (`core.hooksPath`), so check before adding one.
+6. **The git hooks** (`githooks/` beside this file; per clone, like the merge driver in step 4):
+   `sh <this folder>/githooks/install.sh <clone>` copies them into the clone's shared git folder
+   (`git rev-parse --git-common-dir`/hooks), so its lane worktrees run them too (differing old files kept as
+   `.bak.<date>`); `install.sh --check <clone>` reports whether a clone matches without changing anything.
+   A `core.hooksPath` (global or local) makes git skip that folder: the installer warns and prints the
+   `--unset` command rather than changing the config itself. They are:
+   - `pre-push` — **never pushing lane branches:** refuses `refs/heads/lane-[a-j]` (local or remote ref),
+     then runs `git lfs pre-push` with the same input.
+   - `pre-commit` — **never committing a machine-specific package path:** refuses a staged
+     `Packages/manifest.json` / `packages-lock.json` with a `file:` ref that points OUTSIDE the repository —
+     absolute (`file:C:/Repos/UnityJigs`) or climbing out (`file:../../../UnityJigs`, what PackageSwitcher's
+     Switch To Local writes): a teammate without that clone breaks on pull. Packages inside the repo pass
+     (`file:Reflections`, or `file:../../Pkg` from a project in a subfolder).
+   - `post-checkout` / `post-commit` / `post-merge` — Git LFS's own stubs, so the set is complete for an LFS
+     repo (the same files `git lfs install --local` writes).
+   Bypass on purpose with `--no-verify`. These are guards against accidents, not against agents: whether an
+   agent commits or pushes is the user's call (trust), not a hook's.
 7. **Machine moves:** memory (claims included) and transcripts travel; worktrees, Libraries, local settings
    and unpushed commits don't. Revive lanes from their memory files (`lane.ps1 revive <id> -Branch <b>`),
-   re-run the merge driver's `--install` in each clone, and recreate any local hook.
+   re-run the merge driver's `--install` and `githooks/install.sh <clone>` (step 6; `--check <clone>` first
+   to see whether it's needed) in each clone, and recreate any other local hook.
