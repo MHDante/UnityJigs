@@ -62,6 +62,17 @@ repository (it finds the main checkout through git; or pass `-Repo <path>`).
   whenever one changes. Never edit another lane's file.
 - **Diff every asset you save from a lane.** An editor can hold stale data (seen: blank fields in memory
   while the disk had text) and write it back on save.
+- **After the lane's branch moves under an open editor** (a fast-forward, a merge, a stash pop), recompile and
+  check the result. `recompile` can answer `up_to_date` while the loaded assemblies are a day old (seen: a
+  player build then failed on a stale serialized field). `CompilationPipeline.RequestScriptCompilation(
+  RequestScriptCompilationOptions.CleanBuildCache)` through an eval forces it.
+- **Builds:** one fixed output path per lane and purpose (e.g. `<UnityProject>/Builds/Perf/B/`), overwritten
+  each time. Every new exe path makes Windows Firewall prompt (a development player listens), and the launch
+  waits on a click. A one-time inbound-block rule per fixed path removes the prompt.
+- **Check `git status` after every build.** Plugin build steps switch native-plugin import flags in memory
+  for the build and back afterwards; a FAILED build skips the switch-back, and the next editor quit writes
+  the switched flags into the plugin's `.meta` (seen: FMOD's Linux library disabled for Linux). Revert those;
+  never commit them.
 
 ### Releasing
 
@@ -70,6 +81,17 @@ it stands, what the uncommitted work is and whether the next holder should keep 
 `lane.ps1 release -Session <id>`. Uncommitted work may stay: it passes to the next holder (sometimes on
 purpose, to hand a working directory to an agent with different context).
 
+### Pausing
+
+When the user pauses work (they may need the machine, or its editors, for something else): reach a clean point
+you can resume from (don't start a new step; let a run already in flight finish), stage what is done, write
+exactly where you stopped and what comes next into `lane_<id>.md`, stop play mode, then **close your own
+editor**: its PID is in `unity status` for your project path. Close it gracefully (`unity close`, else a
+normal window close); kill only that PID, and only if it won't close. Never kill by image name. Keep the claim
+unless told to release it. (`unity close` can report `Closed false` while the editor does exit: check
+`unity status`.) Unity Hub's background `unity serve` process is not an editor and can hold files open
+(logs from batch builds): leave it alone; the file frees after a Hub restart.
+
 ### Relinquishing someone else's lane
 
 Only the holder releases a lane, so its context can wrap up and its memory gets written. When the user
@@ -77,7 +99,8 @@ asks you to free lane X:
 
 1. Find the holder in `lane.ps1 status` (session id and name). `ListAgents`: if a session with that name is
    running, `SendMessage` it: "The user asks you to give up lane X: update lane_x.md, release it with
-   lane.ps1, and reply with a summary." Pass `notify_when_idle: true` and wait.
+   lane.ps1, and reply with a summary." Its answer arrives as a notification when it's done; wait for it.
+   A lane agent you started yourself (below, "A driver with lane agents") is messaged by its agent id.
 2. Not running: ask the user first, then resume its transcript headless, from the folder its session
    started in (so the session is found):
    `claude -p --resume <session id> "The user asks you to give up lane X: update lane_x.md, release it with lane.ps1, and summarise."`
@@ -86,6 +109,53 @@ asks you to free lane X:
    `lane.ps1 release x -Session <your id> -Force`, and write what you can into its memory file.
 
 Claims never expire: a closed session still holds its lane until it is asked to give it up.
+
+## A driver with lane agents
+
+The pattern that worked best (three perf sessions, two Windows machines and a Steam Deck): one session, the
+**driver**, holds no lane and starts one **lane agent** per lane with the agent tool (a background copy of
+itself; `SendMessage <agent id>` sends it follow-ups, its answers arrive as notifications). Each agent claims
+its lane with its OWN session id.
+
+- **The driver orchestrates; it never implements.** It writes briefs, reviews reports, keeps every lane and
+  every test device busy, and takes decisions to the user one at a time. A driver that starts editing files in
+  the main checkout leaves staged work there that blocks the next round (lanes branch from committed HEAD).
+- **Fixed roles by file ownership** (e.g. A = rendering / shaders, B = CPU / the shared package, C = a target
+  device) instead of re-assigning every round. Two lanes in one Shader Graph or one tooling file means a hard
+  merge: when it can't be avoided, say so in both briefs.
+- **One owner per shared device.** One lane queues every run on a test device (a handheld at 15 W shares
+  power between CPU and GPU: a second job ruins the measurement); the others hand it a build and the exact
+  launch line through the driver. Likewise one lane at a time edits a shared package repo.
+- **Reuse warm agents.** An agent that just reported knows the lane, its editor's quirks and the code: send it
+  the next task instead of starting a cold one. The driver keeps a queue in its notes and sends it the moment
+  a lane reports.
+- **Every brief carries the standing rules**, pasted in full (a missing one cost a whole round): never commit
+  (stage and report; the user commits), fix the shared package in the package (local ref, leave it
+  uncommitted), fixed build paths, a GPU timing lock on a shared machine, only kill PIDs you started, and
+  "a rendering change isn't done until it is captured on the target graphics API" (a D3D11 editor proof missed
+  a Vulkan-only bug).
+- **Lanes branch from committed HEAD.** Before launching a round, have the user commit whatever the lanes must
+  start from.
+
+## Merging lane work, and lanes on other machines
+
+- **Fast-forwards are always safe** (lane ← main, main ← lane). The user decides who may make merge commits;
+  commits of *work* stay the user's. After moving a branch under an open editor, recompile (above).
+- **When two lanes touched one file**, merge after the user has committed the lane that sits on the main
+  checkout; merging into a branch that has staged work means untangling it around that work.
+- **A lane on a local `file:` ref of a shared package** flips back to the git ref (or the lock is bumped to the
+  package's new commit) before its work merges. Check the manifest before every lane merge; the `pre-commit`
+  hook (below) refuses an outside `file:` path.
+- **Abandoned work is stashed, not deleted**, with a message saying what it is
+  (`git stash push -u -m "<task>-wip: …"`), and noted in the lane's memory file: the next agent resumes it.
+- **Lanes on another machine** (driven over a remote shell): their work travels **through git**, not patch
+  files — stage in that machine's lane, the user commits there, merge into that machine's main branch, push,
+  pull here. Patch files handed between machines collided on shared files every round.
+- **Remote editors** open with `Unity.exe -projectPath …` and the CLI attaches as usual. Install build
+  modules (Linux, IL2CPP) BEFORE starting an editor: one installed while it runs makes its builds fail oddly
+  until it restarts. A module install may need the user's UAC click on that machine.
+- **Line endings:** files written on another Windows machine may arrive CRLF; edit them through scripts, and
+  mark binary assets (e.g. `*.graphicsstate binary`) in `.gitattributes`.
 
 ## Lane lifecycle (`lane.ps1`)
 

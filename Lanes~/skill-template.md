@@ -28,6 +28,10 @@ The lane script is `pwsh -NoProfile -File <LANE>` (below: `lane.ps1`). The whole
 - **While you hold it:** `--project-path <lane root>\<UnityProject>` on every Unity CLI call; absolute paths
   under the lane root; `git -C <lane root>`; no commits or pushes unless told; lane branches are never pushed;
   verify with the lane's editor, not the IDE hook; keep `lane_<id>.md` current, and touch no other lane's.
+- **After the branch moves under the open editor** (fast-forward, merge, stash pop): recompile and check it;
+  `up_to_date` can be stale (the README has the forced recompile).
+- **Pausing:** reach a resumable point, write `lane_<id>.md`, then close YOUR editor (its PID from
+  `unity status`; never kill by image name). Keep the claim unless told otherwise.
 - **Release:** update `lane_<id>.md`, then `lane.ps1 release -Session ${CLAUDE_SESSION_ID}`. Uncommitted work
   may stay for the next holder.
 - **Freeing someone else's lane:** only its holder releases it. Ask a running holder with `SendMessage`; a
