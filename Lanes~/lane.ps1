@@ -13,6 +13,7 @@
     pwsh lane.ps1 claim b -Session <id>         # lane B, if it's free
     pwsh lane.ps1 release -Session <id>         # give back the lane this session holds
     pwsh lane.ps1 note b                        # lane B's note (with a registry); -File x.md replaces it
+    pwsh lane.ps1 claim -Device deck -Session <id> -Task "…"  # a shared device (registry only); release / note take -Device too
     pwsh lane.ps1 new b                         # branch lane-b from the main checkout's HEAD
     pwsh lane.ps1 new b -Branch fix-ui          # a new branch fix-ui
     pwsh lane.ps1 revive b -Branch fix-ui       # an existing branch (local or origin/), e.g. on another machine
@@ -46,6 +47,7 @@ param(
     [string]$UnityProject,
     [string]$Machine,
     [string]$File,
+    [string]$Device,
     [switch]$Force
 )
 
@@ -169,6 +171,52 @@ function Registry-Post([string]$op, [hashtable]$body) {
     if ($r.StatusCode -ge 400 -and $r.StatusCode -ne 409) { throw "Lane registry ${op}: $($r.StatusCode) $($r.Content)" }
     return $json
 }
+# Devices: shared, claimable resources with no checkout and no editor (a test handheld), listed by the registry;
+# shared by every repo that uses it. A session may hold a device and a lane at once.
+function Device-Command([string]$op) {
+    if (-not $registry) { throw "Devices live in a registry (.lanes.json)" }
+    $dev = $Device.ToLower()
+    switch ($op) {
+        'claim' {
+            if (-not $Session) { throw "claim needs -Session" }
+            $r = Registry-Post 'device-claim' @{ device = $dev; session = $Session; name = $Name; task = $Task }
+            if ($r.heldBy) { Write-Host "Device $dev is held by $(Holder-Text $r.heldBy)"; exit 2 }
+            Write-Host $(if ($r.already) { "You already hold device $dev" } else { "Claimed device $dev" })
+            $note = (Invoke-RestMethod "$registry/devices" -Headers (Registry-Headers) -TimeoutSec 20).devices.$dev.note
+            if ($note) { Write-Host "Its note (lane.ps1 note -Device $dev):`n$note" }
+        }
+        'release' {
+            if (-not $Session) { throw "release needs -Session" }
+            $r = Registry-Post 'device-release' @{ device = $dev; session = $Session; force = [bool]$Force }
+            if ($r.error) { throw "Device $dev is held by $(Holder-Text $r.heldBy). Only its holder releases it (or -Force, once the user says so)." }
+            Write-Host $(if ($r.released) { "Released device $dev" } else { "Device $dev is already free" })
+        }
+        'note' {
+            if ($File) {
+                $text = [IO.File]::ReadAllText((Resolve-Path $File))
+                Registry-Post 'device-note' @{ device = $dev; note = $text } | Out-Null
+                Write-Host "Device $dev's note replaced ($($text.Length) chars; the registry keeps 1500)"
+            } else {
+                $n = (Invoke-RestMethod "$registry/devices" -Headers (Registry-Headers) -TimeoutSec 20).devices.$dev.note
+                if ($n) { $n } else { "(device $dev has no note)" }
+            }
+        }
+    }
+}
+
+function Device-Table([string]$session) {
+    if (-not $registry) { return '' }
+    $all = try { (Invoke-RestMethod "$registry/devices" -Headers (Registry-Headers) -TimeoutSec 20).devices } catch { $null }
+    if (-not $all) { return '' }
+    $rows = foreach ($p in $all.PSObject.Properties) {
+        $h = $p.Value.holder
+        $holder = if (-not $h) { 'free' } elseif ($session -and $h.session -eq $session) { "YOU ($(Holder-Text $h))" } else { Holder-Text $h }
+        [pscustomobject][ordered]@{ Device = $p.Name; 'Held by' = $holder }
+    }
+    if (-not $rows) { return '' }
+    "Devices:" + ($rows | Format-Table -AutoSize -Wrap | Out-String -Width 200)
+}
+
 function Holder-Text($h) {
     $who = if ($h.name) { "session ``$($h.session)`` ($($h.name))" } else { "session ``$($h.session)``" }
     $since = ([datetime]$h.since).ToLocalTime().ToString('yyyy-MM-dd HH:mm')
@@ -303,7 +351,7 @@ function Show-Status([string]$session) {
         $row.'Held by' = $holder
         [pscustomobject]$row
     }
-    "Lanes on ${machine}:" + ($rows | Format-Table -AutoSize -Wrap | Out-String -Width 200)
+    "Lanes on ${machine}:" + ($rows | Format-Table -AutoSize -Wrap | Out-String -Width 200) + (Device-Table $session)
 }
 
 function Claim-Lane {
@@ -552,9 +600,9 @@ function Retire-Lane([string]$id) {
 switch ($Command) {
     'status' { Show-Status $Session }
     'list' { git -C $repoRoot worktree list; Show-Status $Session }
-    'claim' { Claim-Lane }
-    'release' { Release-Lane }
-    'note' { Lane-Note }
+    'claim' { if ($Device) { Device-Command 'claim' } else { Claim-Lane } }
+    'release' { if ($Device) { Device-Command 'release' } else { Release-Lane } }
+    'note' { if ($Device) { Device-Command 'note' } else { Lane-Note } }
     'session-start' { Session-Start }
     'new' { Need-Worktree $Requested; Add-Lane $Requested $false }
     'revive' {

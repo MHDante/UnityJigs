@@ -4,7 +4,7 @@
 # UnityJigs Lanes~/githooks/install.sh.
 #
 # 1) Refuse to push lane branches (lane-a … lane-j): the scratch branches of the lane worktrees
-#    (C:/Worktrees/<repo>-<id>, hollow-heart docs/21 "Several editors (lanes)"). Their work reaches
+#    (<worktree root>/<repo>-<id>, Lanes~/README.md). Their work reaches
 #    the remote by being merged into a real branch, never as lane-x itself.
 # 2) Then Git LFS's own pre-push, fed the same ref list (it uploads the LFS objects).
 #

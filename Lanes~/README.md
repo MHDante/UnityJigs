@@ -234,6 +234,14 @@ and `-File x.md` replaces it, and no memory file is written. The token comes fro
 `GET lanes?repo=R`; `POST claim {repo, machine, lanes, exact, session, name, task}`, `release {repo, machine,
 lane?, session, force}`, `note {repo, machine, lane, note}`.
 
+**Devices.** A registry can also list **devices**: shared resources with no checkout and no editor (a test
+handheld, a console devkit), one holder each, shared by every repo on the registry. `lane.ps1 claim -Device <name>`
+/ `release -Device <name>` / `note -Device <name> [-File x.md]`; the table lists them under the lanes. A session may
+hold a device and a lane at once. Claim the device before using it (a build, a perf run), release it when done,
+and keep its note to what the next user needs (its state, what is installed, what is running). This is how "one
+owner per shared device" (above) is held. The API: `GET devices`; `POST device-claim {device, session, name,
+task}`, `device-release {device, session, force}`, `device-note {device, note}`.
+
 ## In the editor (compiled into UnityJigs)
 
 - **`UnityJigs.Lanes.Lane`** (runtime, editor-only logic; a build is never a lane): `Id` ("B", or null in the
@@ -279,7 +287,7 @@ Nothing here is imposed on a repo: read it, then adapt. A typical setup:
      then runs `git lfs pre-push` with the same input.
    - `pre-commit` — **never committing a machine-specific package path:** refuses a staged
      `Packages/manifest.json` / `packages-lock.json` with a `file:` ref that points OUTSIDE the repository —
-     absolute (`file:C:/Repos/UnityJigs`) or climbing out (`file:../../../UnityJigs`, what PackageSwitcher's
+     absolute (`file:D:/Clones/SomePackage`) or climbing out (`file:../../../SomePackage`, what PackageSwitcher's
      Switch To Local writes): a teammate without that clone breaks on pull. Packages inside the repo pass
      (`file:Reflections`, or `file:../../Pkg` from a project in a subfolder).
    - `post-checkout` / `post-commit` / `post-merge` — Git LFS's own stubs, so the set is complete for an LFS

@@ -4,8 +4,8 @@
 # UnityJigs Lanes~/githooks/install.sh.
 #
 # Blocks LOCAL "file:" Unity package references that point OUTSIDE the repository in
-# Packages/manifest.json or packages-lock.json: absolute ones ("file:C:/Repos/UnityJigs") and relative
-# ones that climb out of the repo ("file:../../../UnityJigs", what PackageSwitcher's Switch To Local
+# Packages/manifest.json or packages-lock.json: absolute ones ("file:D:/Clones/SomePackage") and relative
+# ones that climb out of the repo ("file:../../../SomePackage", what PackageSwitcher's Switch To Local
 # writes). They work only on a machine with that clone beside the repo; a teammate without it breaks on
 # pull. Packages inside the repo are allowed — embedded ("file:Reflections") or elsewhere in it
 # ("file:../../AtProtoUnity" from a project in a subfolder). No-op in non-Unity repos.
