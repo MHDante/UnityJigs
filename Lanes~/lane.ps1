@@ -3,8 +3,9 @@
     Lanes (README.md beside this script): one checkout and one Unity editor each, so several agents can
     work in parallel. Lane A is the main checkout; lanes B to J are git worktrees at
     <WorktreeRoot>\<repo>-<id> (default C:\Worktrees). A told agent claims a lane before changing files or
-    driving Unity; the claim lives in the lane's memory file (lane_<id>.md in the repo's Claude memory
-    folder), so it travels with the transcripts.
+    driving Unity; the claim lives in the lane's memory file (lane_<id>-<machine>.md in the repo's Claude
+    memory folder), so it travels with the transcripts. Letters are per machine (each has its own lane B);
+    the machine name tells them apart wherever lanes are shared: memory files, claims, the table.
 
 .EXAMPLE
     pwsh lane.ps1 status -Session <id>          # the lane table
@@ -24,7 +25,9 @@
     git, so the script works from any worktree. The Unity project is the folder holding
     ProjectSettings/ProjectVersion.txt at the root or one level down (or -UnityProject). An optional
     .lanes.json at the repository root overrides: { "unityProject": "MyGameUnity", "laneAFirst": true,
-    "worktreeRoot": "C:/Worktrees" }. A repository with no Unity project gets lanes without editors.
+    "worktreeRoot": "C:/Worktrees", "machines": { "MY-PC": "homer" } }. A repository with no Unity project
+    gets lanes without editors. The machine name: -Machine, else $env:LANES_MACHINE, else the
+    COMPUTERNAME's entry in "machines", else the COMPUTERNAME in lower case.
 #>
 param(
     [Parameter(Mandatory, Position = 0)]
@@ -38,6 +41,7 @@ param(
     [string]$Base = 'HEAD',
     [string]$Repo,
     [string]$UnityProject,
+    [string]$Machine,
     [switch]$Force
 )
 
@@ -60,6 +64,14 @@ if (Test-Path $configPath) { $config = Get-Content $configPath -Raw | ConvertFro
 
 $worktreeRoot = if ($config.worktreeRoot) { $config.worktreeRoot -replace '/', '\' } else { 'C:\Worktrees' }
 $laneAFirst = if ($config.ContainsKey('laneAFirst')) { [bool]$config.laneAFirst } else { $true }
+
+# This machine's name: lane letters are per machine, so the memory files, claims and messages carry it.
+$machine = if ($Machine) { $Machine }
+elseif ($env:LANES_MACHINE) { $env:LANES_MACHINE }
+elseif ($config.machines -and $config.machines[$env:COMPUTERNAME]) { $config.machines[$env:COMPUTERNAME] }
+else { $env:COMPUTERNAME }
+$machine = ($machine.ToLower() -replace '[^a-z0-9]+', '-').Trim('-')
+if (-not $machine) { throw "No machine name: pass -Machine or set LANES_MACHINE" }
 
 # The Unity project, relative to a checkout's root ('' when the root is the project, $null when none).
 $unityProject = if ($UnityProject) { $UnityProject }
@@ -100,6 +112,7 @@ function Resolve-MemoryDir {
 }
 $memoryDir = Resolve-MemoryDir
 
+function Lane-Name([string]$id) { "$($id.ToUpper())-$machine" }
 function Lane-Root([string]$id) { if ($id -eq 'a') { $repoRoot } else { Join-Path $worktreeRoot "$repoName-$id" } }
 function Lane-Project([string]$id) { if ($unityProject) { Join-Path (Lane-Root $id) $unityProject } else { Lane-Root $id } }
 function Lane-Exists([string]$id) { Test-Path (Lane-Root $id) }
@@ -127,19 +140,19 @@ function Lane-Eval([string]$id, [string]$body, [int]$timeoutMs = 120000) {
 
 $heldByPattern = '^- \*\*Held by:\*\* (.*)$'
 
-function Lane-File([string]$id) { Join-Path $memoryDir "lane_$id.md" }
+function Lane-File([string]$id) { Join-Path $memoryDir "lane_$id-$machine.md" }
 
 function Ensure-LaneFile([string]$id) {
     $file = Lane-File $id
     if (Test-Path $file) { return }
     New-Item -ItemType Directory -Force $memoryDir | Out-Null
-    $upper = $id.ToUpper()
+    $upper = Lane-Name $id
     $path = "``$(Lane-Project $id)``" + $(if ($id -eq 'a') { ' (the main checkout)' } else { '' })
     $pin = if ($hasUnity) { " (pin: ``--project-path`` this path)" } else { '' }
     $text = @"
 ---
-name: lane-$id
-description: Lane $upper ($(Lane-Root $id)): who holds it, branch, task, uncommitted work, push state; written only by its holder
+name: lane-$id-$machine
+description: Lane $upper ($(Lane-Root $id) on $machine): who holds it, branch, task, uncommitted work, push state; written only by its holder
 metadata:
   type: project
 ---
@@ -155,8 +168,8 @@ The lane workflow: UnityJigs Lanes~/README.md. Update this file whenever the hol
 "@
     [IO.File]::WriteAllText($file, ($text -replace "`r`n", "`n"))
     $index = Join-Path $memoryDir 'MEMORY.md'
-    $line = "- [Lane $upper](lane_$id.md) — who holds lane $upper, its branch, task and uncommitted work (only its holder writes it)"
-    if (-not (Test-Path $index) -or -not (Select-String -Path $index -SimpleMatch "(lane_$id.md)" -Quiet)) {
+    $line = "- [Lane $upper](lane_$id-$machine.md) — who holds lane $upper ($machine), its branch, task and uncommitted work (only its holder writes it)"
+    if (-not (Test-Path $index) -or -not (Select-String -Path $index -SimpleMatch "(lane_$id-$machine.md)" -Quiet)) {
         Add-Content -Path $index -Value $line -Encoding utf8
     }
 }
@@ -221,37 +234,37 @@ function Show-Status([string]$session) {
         $holder = if (-not $h) { 'free' } elseif ($session -and $h.Session -eq $session) { "YOU ($($h.Text))" } else { $h.Text }
         if ($lane -eq 'a' -and -not $laneAFirst -and -not $h) { $holder = 'not a lane here' }
         $row = [ordered]@{
-            Lane = $lane.ToUpper(); Branch = (git -C $root branch --show-current 2>$null)
+            Lane = Lane-Name $lane; Branch = (git -C $root branch --show-current 2>$null)
             Changes = @(git -C $root status --porcelain 2>$null).Count
         }
         if ($hasUnity) { $e = $editors[(Lane-Project $lane)]; $row.Editor = if ($e) { $e } else { 'closed' } }
         $row.'Held by' = $holder
         [pscustomobject]$row
     }
-    $rows | Format-Table -AutoSize -Wrap | Out-String -Width 200
+    "Lanes on ${machine}:" + ($rows | Format-Table -AutoSize -Wrap | Out-String -Width 200)
 }
 
 function Claim-Lane {
     if (-not $Session) { throw "claim needs -Session <this session's id>" }
     With-ClaimLock {
         $mine = Held-By $Session
-        if ($mine) { Write-Host "You already hold lane $($mine.ToUpper()): $(Lane-Root $mine)"; return }
+        if ($mine) { Write-Host "You already hold lane $(Lane-Name $mine): $(Lane-Root $mine)"; return }
         $candidates = if ($Requested) { @($Requested) } else { $laneIds | Where-Object { Lane-Exists $_ } }
         foreach ($lane in $candidates) {
-            if (-not (Lane-Exists $lane)) { throw "Lane $($lane.ToUpper()) doesn't exist (lane.ps1 new $lane)" }
+            if (-not (Lane-Exists $lane)) { throw "Lane $(Lane-Name $lane) doesn't exist (lane.ps1 new $lane)" }
             $h = Get-Holder $lane
             if ($h) {
-                if ($Requested) { Write-Host "Lane $($lane.ToUpper()) is held by $($h.Text)"; exit 2 }
+                if ($Requested) { Write-Host "Lane $(Lane-Name $lane) is held by $($h.Text)"; exit 2 }
                 continue
             }
             $who = if ($Name) { "session ``$Session`` ($Name)" } else { "session ``$Session``" }
             $since = Get-Date -Format 'yyyy-MM-dd HH:mm'
             Set-Holder $lane ("$who since $since" + $(if ($Task) { " · $Task" } else { '' }))
-            Write-Host "Claimed lane $($lane.ToUpper()): $(Lane-Root $lane)"
+            Write-Host "Claimed lane $(Lane-Name $lane): $(Lane-Root $lane)"
             if ($hasUnity) { Write-Host "Unity project: $(Lane-Project $lane) (pin --project-path to it)" }
             Write-Host "Tell the user which lane you're in, so they can /rename this session's tab to it."
             $changes = @(git -C (Lane-Root $lane) status --porcelain).Count
-            if ($changes) { Write-Host "It holds $changes uncommitted change(s) left by its last holder: read lane_$lane.md before touching them." }
+            if ($changes) { Write-Host "It holds $changes uncommitted change(s) left by its last holder: read lane_$lane-$machine.md before touching them." }
             return
         }
         Write-Host "No free lane. Ask the user which holder to relinquish, or whether to create a lane:"
@@ -265,12 +278,12 @@ function Release-Lane {
         $lane = if ($Requested) { $Requested } elseif ($Session) { Held-By $Session } else { $null }
         if (-not $lane) { throw "release: which lane? (this session holds none, or pass the lane)" }
         $h = Get-Holder $lane
-        if (-not $h) { Write-Host "Lane $($lane.ToUpper()) is already free"; return }
+        if (-not $h) { Write-Host "Lane $(Lane-Name $lane) is already free"; return }
         if ($h.Session -ne $Session -and -not $Force) {
-            throw "Lane $($lane.ToUpper()) is held by $($h.Text). Only its holder releases it (or -Force, once the user says the holder can't)."
+            throw "Lane $(Lane-Name $lane) is held by $($h.Text). Only its holder releases it (or -Force, once the user says the holder can't)."
         }
         Set-Holder $lane 'nobody'
-        Write-Host "Released lane $($lane.ToUpper())"
+        Write-Host "Released lane $(Lane-Name $lane)"
     }
 }
 
@@ -286,7 +299,7 @@ function Session-Start {
     Write-Output "## Lanes (UnityJigs Lanes~/README.md)"
     Write-Output "This session's id: $sid"
     if ($mine) {
-        Write-Output "You hold lane $($mine.ToUpper()) ($(Lane-Root $mine)): follow the lane rules (the README, or this repo's /lane skill)."
+        Write-Output "You hold lane $(Lane-Name $mine) ($(Lane-Root $mine)): follow the lane rules (the README, or this repo's /lane skill)."
     } else {
         Write-Output "Use a lane only when the user tells you to; otherwise work in the main checkout as usual."
         Write-Output "Told to: claim one before changing files or driving Unity (the README, or this repo's /lane skill)."
@@ -308,12 +321,12 @@ function Wait-Ready([string]$id, [int]$timeoutSec = 2700) {
             # Listed as ready, but its main thread doesn't answer: a fresh lane's first start opens
             # dialogs (an import warning, a plugin offering a repair, a setup window) that wait for a click.
             if (++$unanswered -eq 2) {
-                Write-Host "Lane $($id.ToUpper())'s editor isn't answering: it is probably waiting on dialogs. Click through them in its window (the README lists the usual ones); waiting."
+                Write-Host "Lane $(Lane-Name $id)'s editor isn't answering: it is probably waiting on dialogs. Click through them in its window (the README lists the usual ones); waiting."
             }
         }
         Start-Sleep -Seconds 5
     }
-    throw "Lane $($id.ToUpper()): the editor wasn't ready after $timeoutSec s. Once it answers, run: lane.ps1 first-start $id"
+    throw "Lane $(Lane-Name $id): the editor wasn't ready after $timeoutSec s. Once it answers, run: lane.ps1 first-start $id"
 }
 
 function Seed-Library([string]$id) {
@@ -346,7 +359,7 @@ function Copy-LocalSettings([string]$id) {
 function Open-Lane([string]$id) {
     if (-not $hasUnity) { return }
     & $unity open (Lane-Project $id) --no-banner 2>&1 | Out-Null
-    Write-Host "Opening lane $($id.ToUpper())'s editor..."
+    Write-Host "Opening lane $(Lane-Name $id)'s editor..."
 }
 
 function First-Start([string]$id) {
@@ -376,7 +389,7 @@ function First-Start([string]$id) {
         Write-Host "Restored $($changed.Count) file(s) the editor changed on its first start:`n  $($changed -join "`n  ")"
     }
     $dirty = git -C $root status --porcelain
-    if ($dirty) { Write-Warning "Lane $($id.ToUpper()) has changes after its first start:`n$($dirty -join "`n")" }
+    if ($dirty) { Write-Warning "Lane $(Lane-Name $id) has changes after its first start:`n$($dirty -join "`n")" }
 }
 
 function Add-Lane([string]$id, [bool]$existing) {
@@ -399,32 +412,32 @@ function Add-Lane([string]$id, [bool]$existing) {
     Open-Lane $id
     First-Start $id
     $pin = if ($hasUnity) { " Pin the Unity CLI with --project-path $(Lane-Project $id)" } else { '' }
-    Write-Host "Lane $($id.ToUpper()) ready: $root on $Branch.$pin"
+    Write-Host "Lane $(Lane-Name $id) ready: $root on $Branch.$pin"
 }
 
 function Retire-Lane([string]$id) {
     $root = Lane-Root $id
     if (-not (Test-Path $root)) { throw "$root doesn't exist" }
     $h = Get-Holder $id
-    if ($h -and -not $Force) { throw "Lane $($id.ToUpper()) is held by $($h.Text): its holder releases it first (or -Force)" }
+    if ($h -and -not $Force) { throw "Lane $(Lane-Name $id) is held by $($h.Text): its holder releases it first (or -Force)" }
     $dirty = git -C $root status --porcelain
-    if ($dirty -and -not $Force) { throw "Lane $($id.ToUpper()) has changes; commit them, or pass -Force to discard them:`n$($dirty -join "`n")" }
+    if ($dirty -and -not $Force) { throw "Lane $(Lane-Name $id) has changes; commit them, or pass -Force to discard them:`n$($dirty -join "`n")" }
     if ($hasUnity) {
         $project = Lane-Project $id
         $editor = (Unity-Json @('status')).data.instances | Where-Object { $_.project -eq $project -and $_.state -eq 'ready' }
         if ($editor) {
             $closing = Lane-Eval $id 'UnityEditor.EditorApplication.delayCall += () => UnityEditor.EditorApplication.Exit(0); return "closing";' 30000
-            Write-Host "Closing lane $($id.ToUpper())'s editor ($closing)..."
+            Write-Host "Closing lane $(Lane-Name $id)'s editor ($closing)..."
             Wait-Process -Id $editor.pid -Timeout 120 -ErrorAction SilentlyContinue
             # git can't remove files the editor still holds, and would leave a half-deleted lane.
-            if (Get-Process -Id $editor.pid -ErrorAction SilentlyContinue) { throw "Lane $($id.ToUpper())'s editor (pid $($editor.pid)) is still running: close it, then retire again" }
+            if (Get-Process -Id $editor.pid -ErrorAction SilentlyContinue) { throw "Lane $(Lane-Name $id)'s editor (pid $($editor.pid)) is still running: close it, then retire again" }
         }
     }
     $branch = git -C $root branch --show-current
     if ($Force) { git -C $repoRoot worktree remove --force $root } else { git -C $repoRoot worktree remove $root }
     if ($LASTEXITCODE) { throw "git worktree remove failed" }
     if (Test-Path (Lane-File $id)) { Set-Holder $id 'nobody' }
-    Write-Host "Lane $($id.ToUpper()) retired. Its branch $branch is kept; so is lane_$id.md."
+    Write-Host "Lane $(Lane-Name $id) retired. Its branch $branch is kept; so is lane_$id-$machine.md."
 }
 
 switch ($Command) {

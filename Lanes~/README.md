@@ -8,6 +8,11 @@ validators and checking things in the editor, so parallel work needs one editor 
 - **Lanes B to J** are git worktrees at `C:\Worktrees\<repo>-<id>` (`my-game-b`), each with its own
   `Library` and editor. They are long-lived: a lane keeps its Library between tasks; switch branches inside
   it instead of making a new one.
+- **Letters are per machine.** Each machine has its own lane A, its own lane B …; what is shared between
+  machines (the memory files, so the claims, and anything an agent writes) names a lane with its machine:
+  **lane B-homer**, `lane_b-homer.md`. The machine name is `-Machine`, else `$env:LANES_MACHINE`, else the
+  computer's entry in `.lanes.json`'s `machines`, else the computer name in lower case. The table lists this
+  machine's lanes only.
 - **Agents use lanes only when the user tells them to.** Otherwise an agent works in the main checkout as
   usual, with no claim.
 
@@ -31,7 +36,7 @@ repository (it finds the main checkout through git; or pass `-Repo <path>`).
    - **No free lane** (exit 3): don't take one. Show the user the table and ask which lane to free, or
      whether to create one (`lane.ps1 new <next letter>`: a few minutes and the Library's size on disk).
    - A held lane you asked for by name exits 2 and names its holder.
-3. **Read the lane's memory file** (`lane_<id>.md` in the repo's Claude memory folder, indexed in
+3. **Read the lane's memory file** (`lane_<id>-<machine>.md` in the repo's Claude memory folder, indexed in
    MEMORY.md: the folder Claude Code reads — `autoMemoryDirectory` when local or user settings set it, else
    `<CLAUDE_CONFIG_DIR or ~/.claude>/projects/<repo key>/memory`; `lane.ps1` resolves it the same way). It may hold uncommitted work a previous holder left on purpose: a handoff. Then
    `git -C <lane root> status -sb`, and check the editor (`lane.ps1 status`): closed → `lane.ps1 open <id>`
@@ -58,7 +63,7 @@ repository (it finds the main checkout through git; or pass `-Repo <path>`).
   (`%LOCALAPPDATA%\Unity\Editor\Editor.log`, written by every editor). A fresh editor's first eval can hit
   the 5 s main-thread limit while it warms up: pass a longer positional timeout or retry. `eval_file`
   only takes `.cs` files.
-- **Memory:** keep `lane_<id>.md` current (task, branch, uncommitted work, last push) and update it
+- **Memory:** keep `lane_<id>-<machine>.md` current (task, branch, uncommitted work, last push) and update it
   whenever one changes. Never edit another lane's file.
 - **Diff every asset you save from a lane.** An editor can hold stale data (seen: blank fields in memory
   while the disk had text) and write it back on save.
@@ -76,7 +81,7 @@ repository (it finds the main checkout through git; or pass `-Repo <path>`).
 
 ### Releasing
 
-When your work in the lane is done, or the user asks: bring `lane_<id>.md` up to date (what you did, where
+When your work in the lane is done, or the user asks: bring `lane_<id>-<machine>.md` up to date (what you did, where
 it stands, what the uncommitted work is and whether the next holder should keep it), then
 `lane.ps1 release -Session <id>`. Uncommitted work may stay: it passes to the next holder (sometimes on
 purpose, to hand a working directory to an agent with different context).
@@ -85,7 +90,7 @@ purpose, to hand a working directory to an agent with different context).
 
 When the user pauses work (they may need the machine, or its editors, for something else): reach a clean point
 you can resume from (don't start a new step; let a run already in flight finish), stage what is done, write
-exactly where you stopped and what comes next into `lane_<id>.md`, stop play mode, then **close your own
+exactly where you stopped and what comes next into `lane_<id>-<machine>.md`, stop play mode, then **close your own
 editor**: its PID is in `unity status` for your project path. Close it gracefully (`unity close`, else a
 normal window close); kill only that PID, and only if it won't close. Never kill by image name. Keep the claim
 unless told to release it. (`unity close` can report `Closed false` while the editor does exit: check
@@ -98,12 +103,12 @@ Only the holder releases a lane, so its context can wrap up and its memory gets 
 asks you to free lane X:
 
 1. Find the holder in `lane.ps1 status` (session id and name). `ListAgents`: if a session with that name is
-   running, `SendMessage` it: "The user asks you to give up lane X: update lane_x.md, release it with
+   running, `SendMessage` it: "The user asks you to give up lane X: update lane_x-<machine>.md, release it with
    lane.ps1, and reply with a summary." Its answer arrives as a notification when it's done; wait for it.
    A lane agent you started yourself (below, "A driver with lane agents") is messaged by its agent id.
 2. Not running: ask the user first, then resume its transcript headless, from the folder its session
    started in (so the session is found):
-   `claude -p --resume <session id> "The user asks you to give up lane X: update lane_x.md, release it with lane.ps1, and summarise."`
+   `claude -p --resume <session id> "The user asks you to give up lane X: update lane_x-<machine>.md, release it with lane.ps1, and summarise."`
 3. The lane is free once its "Held by" line says nobody. Claim it.
 4. The holder can't be resumed (transcript gone): only on the user's word,
    `lane.ps1 release x -Session <your id> -Force`, and write what you can into its memory file.
@@ -196,17 +201,19 @@ What `new` / `revive` do, and why:
   once its editor answers.
 - **Local settings:** `.claude/settings.local.json` (repo root and Unity project) is copied in with
   `UNITY_PROJECT_PATH` pinned, for a session started inside the lane.
-- **The memory file** `lane_<id>.md` is created if missing.
+- **The memory file** `lane_<id>-<machine>.md` is created if missing.
 
 `lane.ps1` finds the Unity project (the folder with `ProjectSettings/ProjectVersion.txt`, at the root or
 one level down). An optional `.lanes.json` at the repository root overrides it:
 
 ```json
-{ "unityProject": "MyGameUnity", "laneAFirst": true, "worktreeRoot": "C:/Worktrees" }
+{ "unityProject": "MyGameUnity", "laneAFirst": true, "worktreeRoot": "C:/Worktrees",
+  "machines": { "MY-DESKTOP": "homer", "MY-LAPTOP": "legion" } }
 ```
 
 `laneAFirst: false` keeps agents out of the main checkout (lanes B to J only). A repository with no Unity
-project gets lanes without editors.
+project gets lanes without editors. `machines` maps computer names (`$env:COMPUTERNAME`) to the short
+names lanes carry.
 
 ## In the editor (compiled into UnityJigs)
 
@@ -260,7 +267,8 @@ Nothing here is imposed on a repo: read it, then adapt. A typical setup:
      repo (the same files `git lfs install --local` writes).
    Bypass on purpose with `--no-verify`. These are guards against accidents, not against agents: whether an
    agent commits or pushes is the user's call (trust), not a hook's.
-7. **Machine moves:** memory (claims included) and transcripts travel; worktrees, Libraries, local settings
+7. **Machine moves:** memory (claims included) and transcripts travel; a lane's memory file names its
+   machine, so lanes with the same letter on two machines never share a claim. Worktrees, Libraries, local settings
    and unpushed commits don't. Revive lanes from their memory files (`lane.ps1 revive <id> -Branch <b>`),
    re-run the merge driver's `--install` and `githooks/install.sh <clone>` (step 6; `--check <clone>` first
    to see whether it's needed) in each clone, and recreate any other local hook.
