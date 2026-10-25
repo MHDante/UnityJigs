@@ -23,16 +23,16 @@ The lane script is `pwsh -NoProfile -File <LANE>` (below: `lane.ps1`). The whole
 - **Only when the user tells you to.** Otherwise work in the main checkout as usual.
 - **Claim:** `lane.ps1 claim -Session ${CLAUDE_SESSION_ID} -Name <your ListAgents name> -Task "<one line>"`
   (lane A first; a letter asks for that lane). No free lane: ask the user; never take a held lane.
-- **Then:** read the lane's memory file (`lane_<id>-<machine>.md`), check `git -C <lane root> status -sb` and its
+- **Then:** read the lane's note (`lane.ps1 note <id>`; with no registry, its memory file `lane_<id>-<machine>.md`), check `git -C <lane root> status -sb` and its
   editor, and tell the user which lane you're in (they `/rename` your tab; you never do).
 - **While you hold it:** `--project-path <lane root>\<UnityProject>` on every Unity CLI call; absolute paths
   under the lane root; `git -C <lane root>`; no commits or pushes unless told; lane branches are never pushed;
-  verify with the lane's editor, not the IDE hook; keep `lane_<id>-<machine>.md` current, and touch no other lane's.
+  verify with the lane's editor, not the IDE hook; keep the lane's note current (`lane.ps1 note <id> -File x.md`), and touch no other lane's.
 - **After the branch moves under the open editor** (fast-forward, merge, stash pop): recompile and check it;
   `up_to_date` can be stale (the README has the forced recompile).
-- **Pausing:** reach a resumable point, write `lane_<id>-<machine>.md`, then close YOUR editor (its PID from
+- **Pausing:** reach a resumable point, write the lane's note, then close YOUR editor (its PID from
   `unity status`; never kill by image name). Keep the claim unless told otherwise.
-- **Release:** update `lane_<id>-<machine>.md`, then `lane.ps1 release -Session ${CLAUDE_SESSION_ID}`. Uncommitted work
+- **Release:** update the lane's note, then `lane.ps1 release -Session ${CLAUDE_SESSION_ID}`. Uncommitted work
   may stay for the next holder.
 - **Freeing someone else's lane:** only its holder releases it. Ask a running holder with `SendMessage`; a
   closed one only after the user agrees, by resuming its transcript headless (the README has the command).

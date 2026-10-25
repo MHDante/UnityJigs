@@ -12,6 +12,7 @@
     pwsh lane.ps1 claim -Session <id> -Task "…"  # the first free lane (A first, unless the repo says otherwise)
     pwsh lane.ps1 claim b -Session <id>         # lane B, if it's free
     pwsh lane.ps1 release -Session <id>         # give back the lane this session holds
+    pwsh lane.ps1 note b                        # lane B's note (with a registry); -File x.md replaces it
     pwsh lane.ps1 new b                         # branch lane-b from the main checkout's HEAD
     pwsh lane.ps1 new b -Branch fix-ui          # a new branch fix-ui
     pwsh lane.ps1 revive b -Branch fix-ui       # an existing branch (local or origin/), e.g. on another machine
@@ -25,13 +26,15 @@
     git, so the script works from any worktree. The Unity project is the folder holding
     ProjectSettings/ProjectVersion.txt at the root or one level down (or -UnityProject). An optional
     .lanes.json at the repository root overrides: { "unityProject": "MyGameUnity", "laneAFirst": true,
-    "worktreeRoot": "C:/Worktrees", "machines": { "MY-PC": "homer" } }. A repository with no Unity project
+    "worktreeRoot": "C:/Worktrees", "machines": { "MY-PC": "desk" } }. A repository with no Unity project
     gets lanes without editors. The machine name: -Machine, else $env:LANES_MACHINE, else the
     COMPUTERNAME's entry in "machines", else the COMPUTERNAME in lower case.
+    With "registry": "https://…/api" in .lanes.json, claims and lane notes live in that registry (a small web
+    service every machine reaches at once) instead of the memory files: see the README.
 #>
 param(
     [Parameter(Mandatory, Position = 0)]
-    [ValidateSet('status', 'claim', 'release', 'session-start', 'new', 'revive', 'open', 'first-start', 'list', 'retire')]
+    [ValidateSet('status', 'claim', 'release', 'note', 'session-start', 'new', 'revive', 'open', 'first-start', 'list', 'retire')]
     [string]$Command,
     [Parameter(Position = 1)][ValidatePattern('^[a-jA-J]$')][string]$Id,
     [string]$Session,
@@ -42,6 +45,7 @@ param(
     [string]$Repo,
     [string]$UnityProject,
     [string]$Machine,
+    [string]$File,
     [switch]$Force
 )
 
@@ -64,6 +68,8 @@ if (Test-Path $configPath) { $config = Get-Content $configPath -Raw | ConvertFro
 
 $worktreeRoot = if ($config.worktreeRoot) { $config.worktreeRoot -replace '/', '\' } else { 'C:\Worktrees' }
 $laneAFirst = if ($config.ContainsKey('laneAFirst')) { [bool]$config.laneAFirst } else { $true }
+$registry = if ($config.registry) { $config.registry.TrimEnd('/') } else { $null }
+$registryRepo = if ($config.registryRepo) { $config.registryRepo } else { ($repoName.ToLower() -replace '[^a-z0-9]+', '-').Trim('-') }
 
 # This machine's name: lane letters are per machine, so the memory files, claims and messages carry it.
 $machine = if ($Machine) { $Machine }
@@ -134,6 +140,41 @@ function Lane-Eval([string]$id, [string]$body, [int]$timeoutMs = 120000) {
     } finally { Remove-Item $file -ErrorAction SilentlyContinue }
 }
 
+# ── The registry (optional) ───────────────────────────────────────────────────────────────────────
+# Claims and notes for every machine, at "registry" (.lanes.json). Lane keys are "<machine>/<letter>".
+
+# Its token: $env:LANES_TOKEN, else the file ~/.lanes-token (per user, outside every repo), sent as x-lanes-token.
+function Registry-Headers {
+    if (-not $script:registryToken) {
+        $file = Join-Path $env:USERPROFILE '.lanes-token'
+        $script:registryToken = if ($env:LANES_TOKEN) { $env:LANES_TOKEN } elseif (Test-Path $file) { (Get-Content $file -Raw).Trim() } else { $null }
+        if (-not $script:registryToken) { throw "The lane registry needs its token: put it in $file (or LANES_TOKEN); the README says where it comes from" }
+    }
+    @{ 'x-lanes-token' = $script:registryToken }
+}
+
+$script:registryLanes = $null
+function Registry-Lanes {
+    if ($null -eq $script:registryLanes) {
+        $script:registryLanes = (Invoke-RestMethod "$registry/lanes?repo=$registryRepo" -Headers (Registry-Headers) -TimeoutSec 20).lanes
+    }
+    $script:registryLanes
+}
+function Registry-Post([string]$op, [hashtable]$body) {
+    $body.repo = $registryRepo
+    $script:registryLanes = $null
+    $r = Invoke-WebRequest "$registry/$op" -Method Post -Headers (Registry-Headers) -ContentType 'application/json' -SkipHttpErrorCheck -TimeoutSec 20 `
+        -Body ($body | ConvertTo-Json -Compress)
+    $json = try { $r.Content | ConvertFrom-Json } catch { $null }
+    if ($r.StatusCode -ge 400 -and $r.StatusCode -ne 409) { throw "Lane registry ${op}: $($r.StatusCode) $($r.Content)" }
+    return $json
+}
+function Holder-Text($h) {
+    $who = if ($h.name) { "session ``$($h.session)`` ($($h.name))" } else { "session ``$($h.session)``" }
+    $since = ([datetime]$h.since).ToLocalTime().ToString('yyyy-MM-dd HH:mm')
+    "$who since $since" + $(if ($h.task) { " · $($h.task)" } else { '' })
+}
+
 # ── Claims ────────────────────────────────────────────────────────────────────────────────────────
 # One line of the lane's memory file: "- **Held by:** nobody", or
 # "- **Held by:** session `<id>` (<name>) since <time> · <task>".
@@ -143,6 +184,7 @@ $heldByPattern = '^- \*\*Held by:\*\* (.*)$'
 function Lane-File([string]$id) { Join-Path $memoryDir "lane_$id-$machine.md" }
 
 function Ensure-LaneFile([string]$id) {
+    if ($registry) { return }
     $file = Lane-File $id
     if (Test-Path $file) { return }
     New-Item -ItemType Directory -Force $memoryDir | Out-Null
@@ -175,6 +217,11 @@ The lane workflow: UnityJigs Lanes~/README.md. Update this file whenever the hol
 }
 
 function Get-Holder([string]$id) {
+    if ($registry) {
+        $h = (Registry-Lanes)."$machine/$id".holder
+        if ($h) { return @{ Session = $h.session; Text = (Holder-Text $h) } }
+        return $null
+    }
     $file = Lane-File $id
     if (-not (Test-Path $file)) { return $null }
     foreach ($line in [IO.File]::ReadAllLines($file)) {
@@ -187,6 +234,11 @@ function Get-Holder([string]$id) {
 }
 
 function Set-Holder([string]$id, [string]$value) {
+    if ($registry) {
+        # Only ever called to free a lane (retire): the registry takes claims through claim.
+        if ($value -eq 'nobody') { Registry-Post 'release' @{ machine = $machine; lane = $id; session = 'retire'; force = $true } | Out-Null }
+        return
+    }
     Ensure-LaneFile $id
     $file = Lane-File $id
     $lines = [Collections.Generic.List[string]][IO.File]::ReadAllLines($file)
@@ -214,6 +266,16 @@ function With-ClaimLock([scriptblock]$body) {
 }
 
 function Held-By([string]$session) {
+    if ($registry) {
+        foreach ($p in (Registry-Lanes).PSObject.Properties) {
+            if ($p.Value.holder.session -eq $session) {
+                $m, $l = $p.Name -split '/'
+                if ($m -eq $machine) { return $l }
+                throw "This session holds lane $($l.ToUpper())-$m, on another machine"
+            }
+        }
+        return $null
+    }
     foreach ($lane in $allIds) { $h = Get-Holder $lane; if ($h -and $h.Session -eq $session) { return $lane } }
     return $null
 }
@@ -246,6 +308,30 @@ function Show-Status([string]$session) {
 
 function Claim-Lane {
     if (-not $Session) { throw "claim needs -Session <this session's id>" }
+    if ($registry) {
+        $candidates = @(if ($Requested) { $Requested } else { $laneIds | Where-Object { Lane-Exists $_ } })
+        foreach ($lane in $candidates) { if (-not (Lane-Exists $lane)) { throw "Lane $(Lane-Name $lane) doesn't exist (lane.ps1 new $lane)" } }
+        $r = Registry-Post 'claim' @{ machine = $machine; lanes = $candidates; exact = [bool]$Requested; session = $Session; name = $Name; task = $Task }
+        if ($r.already) {
+            $m, $l = $r.already -split '/'
+            Write-Host "You already hold lane $($l.ToUpper())-$m$(if ($m -eq $machine) { ": $(Lane-Root $l)" })"; return
+        }
+        if ($r.heldBy) { Write-Host "Lane $(Lane-Name $Requested) is held by $(Holder-Text $r.heldBy)"; exit 2 }
+        if ($r.none) {
+            Write-Host "No free lane. Ask the user which holder to relinquish, or whether to create a lane:"
+            Write-Host (Show-Status $Session)
+            exit 3
+        }
+        $lane = ($r.claimed -split '/')[1]
+        Write-Host "Claimed lane $(Lane-Name $lane): $(Lane-Root $lane)"
+        if ($hasUnity) { Write-Host "Unity project: $(Lane-Project $lane) (pin --project-path to it)" }
+        Write-Host "Tell the user which lane you're in, so they can /rename this session's tab to it."
+        $note = (Registry-Lanes)."$machine/$lane".note
+        if ($note) { Write-Host "Its note (lane.ps1 note $lane):`n$note" }
+        $changes = @(git -C (Lane-Root $lane) status --porcelain).Count
+        if ($changes) { Write-Host "It holds $changes uncommitted change(s) left by its last holder: read its note before touching them." }
+        return
+    }
     With-ClaimLock {
         $mine = Held-By $Session
         if ($mine) { Write-Host "You already hold lane $(Lane-Name $mine): $(Lane-Root $mine)"; return }
@@ -274,6 +360,16 @@ function Claim-Lane {
 }
 
 function Release-Lane {
+    if ($registry) {
+        if (-not $Session) { throw "release needs -Session" }
+        $body = @{ machine = $machine; session = $Session; force = [bool]$Force }
+        if ($Requested) { $body.lane = $Requested }
+        $r = Registry-Post 'release' $body
+        if ($r.error) { throw "Lane $(Lane-Name $Requested) is held by $(Holder-Text $r.heldBy). Only its holder releases it (or -Force, once the user says the holder can't)." }
+        if ($r.released) { $m, $l = $r.released -split '/'; Write-Host "Released lane $($l.ToUpper())-$m" }
+        else { Write-Host "Nothing to release$(if ($r.lane) { " ($($r.lane) is already free)" })" }
+        return
+    }
     With-ClaimLock {
         $lane = if ($Requested) { $Requested } elseif ($Session) { Held-By $Session } else { $null }
         if (-not $lane) { throw "release: which lane? (this session holds none, or pass the lane)" }
@@ -284,6 +380,19 @@ function Release-Lane {
         }
         Set-Holder $lane 'nobody'
         Write-Host "Released lane $(Lane-Name $lane)"
+    }
+}
+
+function Lane-Note {
+    if (-not $registry) { throw "note needs a registry (.lanes.json); without one, a lane's note is its memory file" }
+    if (-not $Requested) { throw "Which lane?" }
+    if ($File) {
+        $text = [IO.File]::ReadAllText((Resolve-Path $File))
+        Registry-Post 'note' @{ machine = $machine; lane = $Requested; note = $text } | Out-Null
+        Write-Host "Lane $(Lane-Name $Requested)'s note replaced ($($text.Length) chars; the registry keeps 1500)"
+    } else {
+        $n = (Registry-Lanes)."$machine/$Requested".note
+        if ($n) { $n } else { "(lane $(Lane-Name $Requested) has no note)" }
     }
 }
 
@@ -437,7 +546,7 @@ function Retire-Lane([string]$id) {
     if ($Force) { git -C $repoRoot worktree remove --force $root } else { git -C $repoRoot worktree remove $root }
     if ($LASTEXITCODE) { throw "git worktree remove failed" }
     if (Test-Path (Lane-File $id)) { Set-Holder $id 'nobody' }
-    Write-Host "Lane $(Lane-Name $id) retired. Its branch $branch is kept; so is lane_$id-$machine.md."
+    Write-Host "Lane $(Lane-Name $id) retired. Its branch $branch is kept$(if (-not $registry) { "; so is lane_$id-$machine.md" })."
 }
 
 switch ($Command) {
@@ -445,6 +554,7 @@ switch ($Command) {
     'list' { git -C $repoRoot worktree list; Show-Status $Session }
     'claim' { Claim-Lane }
     'release' { Release-Lane }
+    'note' { Lane-Note }
     'session-start' { Session-Start }
     'new' { Need-Worktree $Requested; Add-Lane $Requested $false }
     'revive' {
