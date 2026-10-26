@@ -145,28 +145,44 @@ function Lane-Eval([string]$id, [string]$body, [int]$timeoutMs = 120000) {
 # ── The registry (optional) ───────────────────────────────────────────────────────────────────────
 # Claims and notes for every machine, at "registry" (.lanes.json). Lane keys are "<machine>/<letter>".
 
-# Its token: $env:LANES_TOKEN, else the file ~/.lanes-token (per user, outside every repo), sent as x-lanes-token.
-function Registry-Headers {
+# Its token: $env:LANES_TOKEN, else the file ~/.lanes-token (per user, outside every repo). Sent as
+# "Authorization: Bearer"; a registry that answers 401 to it is asked again with the x-lanes-token header (a registry
+# that checks the token itself), and that header is kept for the rest of the run.
+$script:registryLegacyHeader = $false
+function Registry-Token {
     if (-not $script:registryToken) {
         $file = Join-Path $env:USERPROFILE '.lanes-token'
         $script:registryToken = if ($env:LANES_TOKEN) { $env:LANES_TOKEN } elseif (Test-Path $file) { (Get-Content $file -Raw).Trim() } else { $null }
         if (-not $script:registryToken) { throw "The lane registry needs its token: put it in $file (or LANES_TOKEN); the README says where it comes from" }
     }
-    @{ 'x-lanes-token' = $script:registryToken }
+    $script:registryToken
+}
+function Registry-Request([string]$path, [string]$method = 'Get', [string]$json = $null) {
+    foreach ($legacy in @($script:registryLegacyHeader, $true) | Select-Object -Unique) {
+        $headers = if ($legacy) { @{ 'x-lanes-token' = (Registry-Token) } } else { @{ Authorization = "Bearer $(Registry-Token)" } }
+        $call = @{ Uri = "$registry/$path"; Method = $method; Headers = $headers; SkipHttpErrorCheck = $true; TimeoutSec = 20 }
+        if ($json) { $call.ContentType = 'application/json'; $call.Body = $json }
+        $r = Invoke-WebRequest @call
+        if ($r.StatusCode -ne 401) { $script:registryLegacyHeader = $legacy; break }
+    }
+    if ($r.StatusCode -eq 401) { throw "The lane registry refused the token (401): check ~/.lanes-token" }
+    return $r
+}
+function Registry-Get([string]$path) {
+    $r = Registry-Request $path
+    if ($r.StatusCode -ge 400) { throw "Lane registry ${path}: $($r.StatusCode) $($r.Content)" }
+    $r.Content | ConvertFrom-Json
 }
 
 $script:registryLanes = $null
 function Registry-Lanes {
-    if ($null -eq $script:registryLanes) {
-        $script:registryLanes = (Invoke-RestMethod "$registry/lanes?repo=$registryRepo" -Headers (Registry-Headers) -TimeoutSec 20).lanes
-    }
+    if ($null -eq $script:registryLanes) { $script:registryLanes = (Registry-Get "lanes?repo=$registryRepo").lanes }
     $script:registryLanes
 }
 function Registry-Post([string]$op, [hashtable]$body) {
     $body.repo = $registryRepo
     $script:registryLanes = $null
-    $r = Invoke-WebRequest "$registry/$op" -Method Post -Headers (Registry-Headers) -ContentType 'application/json' -SkipHttpErrorCheck -TimeoutSec 20 `
-        -Body ($body | ConvertTo-Json -Compress)
+    $r = Registry-Request $op 'Post' ($body | ConvertTo-Json -Compress)
     $json = try { $r.Content | ConvertFrom-Json } catch { $null }
     if ($r.StatusCode -ge 400 -and $r.StatusCode -ne 409) { throw "Lane registry ${op}: $($r.StatusCode) $($r.Content)" }
     return $json
@@ -182,7 +198,7 @@ function Device-Command([string]$op) {
             $r = Registry-Post 'device-claim' @{ device = $dev; session = $Session; name = $Name; task = $Task }
             if ($r.heldBy) { Write-Host "Device $dev is held by $(Holder-Text $r.heldBy)"; exit 2 }
             Write-Host $(if ($r.already) { "You already hold device $dev" } else { "Claimed device $dev" })
-            $note = (Invoke-RestMethod "$registry/devices" -Headers (Registry-Headers) -TimeoutSec 20).devices.$dev.note
+            $note = (Registry-Get 'devices').devices.$dev.note
             if ($note) { Write-Host "Its note (lane.ps1 note -Device $dev):`n$note" }
         }
         'release' {
@@ -197,7 +213,7 @@ function Device-Command([string]$op) {
                 Registry-Post 'device-note' @{ device = $dev; note = $text } | Out-Null
                 Write-Host "Device $dev's note replaced ($($text.Length) chars; the registry keeps 1500)"
             } else {
-                $n = (Invoke-RestMethod "$registry/devices" -Headers (Registry-Headers) -TimeoutSec 20).devices.$dev.note
+                $n = (Registry-Get 'devices').devices.$dev.note
                 if ($n) { $n } else { "(device $dev has no note)" }
             }
         }
@@ -206,7 +222,7 @@ function Device-Command([string]$op) {
 
 function Device-Table([string]$session) {
     if (-not $registry) { return '' }
-    $all = try { (Invoke-RestMethod "$registry/devices" -Headers (Registry-Headers) -TimeoutSec 20).devices } catch { $null }
+    $all = try { (Registry-Get 'devices').devices } catch { $null }
     if (-not $all) { return '' }
     $rows = foreach ($p in $all.PSObject.Properties) {
         $h = $p.Value.holder
@@ -365,6 +381,10 @@ function Claim-Lane {
             Write-Host "You already hold lane $($l.ToUpper())-$m$(if ($m -eq $machine) { ": $(Lane-Root $l)" })"; return
         }
         if ($r.heldBy) { Write-Host "Lane $(Lane-Name $Requested) is held by $(Holder-Text $r.heldBy)"; exit 2 }
+        if ($r.full) {
+            Write-Host "This machine ($machine) runs at most $($r.full.limit) editors at once, and $($r.full.held.Count) lanes on it are held ($($r.full.held -join ', '), across repos). Ask the user which to free, or use another machine."
+            exit 3
+        }
         if ($r.none) {
             Write-Host "No free lane. Ask the user which holder to relinquish, or whether to create a lane:"
             Write-Host (Show-Status $Session)

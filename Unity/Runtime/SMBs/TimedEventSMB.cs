@@ -8,7 +8,7 @@ namespace UnityJigs.SMBs
     // EnterCounts/ExitCounts guard suppresses a duplicate fire when the state re-enters itself via a blend.
     // FireOnExitIfMissed lets a subclass guarantee the beat still fires on exit if the window was skipped.
     //
-    // Generic counterpart to NorthShore's skater TimedEventSkaterSMB (which hands back a SkaterAnimator);
+    // Generic counterpart to a game's own typed timed-event SMB (one that hands back its character animator);
     // this one hands back the plain Animator, so it works on any animator (e.g. ShakeSMB).
     public abstract class TimedEventSMB : TrackedStateSMB
     {

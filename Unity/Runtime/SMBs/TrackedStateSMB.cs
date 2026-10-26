@@ -10,7 +10,7 @@ namespace UnityJigs.SMBs
     // (surviving a state that re-enters itself via a blend) or query the active window via AnyState.
     //
     // Skater-agnostic: this is the shared backbone under both the generic timing infra (TimedEventSMB ->
-    // ShakeSMB) and NorthShore's skater SMB bases, which add their SkaterAnimator registration on top.
+    // ShakeSMB) and a game's own SMB bases, which add their character-animator registration on top.
     public abstract class TrackedStateSMB : StateMachineBehaviour
     {
         protected int EnterCounts { get; private set; }

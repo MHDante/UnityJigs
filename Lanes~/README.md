@@ -230,7 +230,8 @@ handoff; 1500 characters). Name it in `.lanes.json`:
 `registryRepo` defaults to the repo folder's name in lower case. With a registry, `claim` / `release` / the table /
 `session-start` go through it (a claim is atomic there, across machines), `lane.ps1 note <id>` prints a lane's note
 and `-File x.md` replaces it, and no memory file is written. The token comes from `$env:LANES_TOKEN`, else
-`~/.lanes-token` (per user, outside every repo), sent as `x-lanes-token`. The API (one JSON document per repo):
+`~/.lanes-token` (per user, outside every repo), sent as `Authorization: Bearer` (on a 401, `lane.ps1`
+retries with an `x-lanes-token` header, for a registry that checks the token itself). The API (one JSON document per repo):
 `GET lanes?repo=R`; `POST claim {repo, machine, lanes, exact, session, name, task}`, `release {repo, machine,
 lane?, session, force}`, `note {repo, machine, lane, note}`.
 
@@ -241,6 +242,10 @@ hold a device and a lane at once. Claim the device before using it (a build, a p
 and keep its note to what the next user needs (its state, what is installed, what is running). This is how "one
 owner per shared device" (above) is held. The API: `GET devices`; `POST device-claim {device, session, name,
 task}`, `device-release {device, session, force}`, `device-note {device, note}`.
+
+**A machine that runs only N editors.** The registry can cap a machine (`machineLimits` in its config, e.g. a
+small machine at 2): a claim there is refused while N lanes on that machine are held, counted across every repo on
+the registry. `claim` then exits 3 and names the holders. Give such a machine at most N lanes per repo too.
 
 ## In the editor (compiled into UnityJigs)
 
