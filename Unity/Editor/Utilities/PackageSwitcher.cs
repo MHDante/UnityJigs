@@ -147,20 +147,35 @@ namespace UnityJigs.Editor.Utilities
             if (settings.LocalToRemotePackages.Count == 0) return false;
             foreach (var (local, remote) in settings.LocalToRemotePackages)
             {
-                var path = local.StartsWith("file:", StringComparison.Ordinal) ? local.Substring(5) : local;
+                // A legacy entry is "file:<path>" → "<remote>", or a whole manifest line on each side:
+                // "\"<name>\": \"file:<path>\"" → "\"<name>\": \"<remote>\"".
+                var (name, localRef) = SplitManifestLine(local);
+                var path = localRef.StartsWith("file:", StringComparison.Ordinal) ? localRef.Substring(5) : localRef;
+                if (path.IndexOfAny(Path.GetInvalidPathChars()) >= 0 || path.Contains('"'))
+                {
+                    Debug.LogError($"[PackageSwitcher] Can't read the old mapping '{local}': set it up again in Preferences > Package Switcher.");
+                    continue;
+                }
                 // A relative legacy path was relative to some project's Packages folder: try this project's.
                 var folder = Path.IsPathRooted(path) ? path : Path.Combine(PackagesFolder, path);
                 settings.Packages.Add(new PackageMapping
                 {
-                    Name = ReadPackageName(folder) ?? "",
+                    Name = ReadPackageName(folder) ?? name ?? "",
                     LocalFolder = Canonical(folder),
-                    Remote = remote,
+                    Remote = SplitManifestLine(remote).Value,
                 });
             }
             Debug.Log($"[PackageSwitcher] Migrated {settings.LocalToRemotePackages.Count} old mapping(s) to " +
                       "name + local folder + remote.");
             settings.LocalToRemotePackages.Clear();
             return true;
+        }
+
+        // "\"com.x.y\": \"value\"," → (com.x.y, value); anything else → (null, the text trimmed).
+        private static (string? Name, string Value) SplitManifestLine(string text)
+        {
+            var match = Regex.Match(text, "^\\s*\"([^\"]+)\"\\s*:\\s*\"([^\"]*)\"\\s*,?\\s*$");
+            return match.Success ? (match.Groups[1].Value, match.Groups[2].Value) : (null, text.Trim());
         }
 
         private static string? ReadPackageName(string folder)
