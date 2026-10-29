@@ -13,6 +13,12 @@ validators and checking things in the editor, so parallel work needs one editor 
   **lane B-desk**, `lane_b-desk.md`. The machine name is `-Machine`, else `$env:LANES_MACHINE`, else the
   computer's entry in `.lanes.json`'s `machines`, else the computer name in lower case. The table lists this
   machine's lanes only.
+- **Windows and macOS.** `lane.ps1` needs PowerShell 7 (`pwsh`; on a Mac `brew install powershell`). It finds the
+  Unity CLI where Unity Hub installs it (`%LOCALAPPDATA%\Unity\bin\unity.exe`, `~/.unity/bin/unity`) or on the
+  PATH, seeds a lane's Library with `robocopy` or `rsync`, and keeps worktrees in `C:\Worktrees` or
+  `~/Worktrees` (a drive-letter `worktreeRoot` in `.lanes.json` is ignored off Windows). A machine's name is its
+  computer name (`[Environment]::MachineName`). The merge driver finds UnityYAMLMerge in the editor install on
+  either.
 - **Agents use lanes only when the user tells them to.** Otherwise an agent works in the main checkout as
   usual, with no claim.
 

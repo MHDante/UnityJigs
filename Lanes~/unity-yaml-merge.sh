@@ -44,7 +44,11 @@ if [ -z "$tool" ]; then
     # Git runs merge drivers from the top of the working tree.
     version_file=$(ls ProjectSettings/ProjectVersion.txt */ProjectSettings/ProjectVersion.txt 2>/dev/null | head -n 1)
     version=$(sed -n 's/^m_EditorVersion: //p' "$version_file" 2>/dev/null | tr -d '\r ')
-    tool="C:/Program Files/Unity/Hub/Editor/$version/Editor/Data/Tools/UnityYAMLMerge.exe"
+    case "$(uname -s)" in
+        Darwin) tool="/Applications/Unity/Hub/Editor/$version/Unity.app/Contents/Helpers/UnityYAMLMerge" ;;
+        Linux) tool="$HOME/Unity/Hub/Editor/$version/Editor/Data/Tools/UnityYAMLMerge" ;;
+        *) tool="C:/Program Files/Unity/Hub/Editor/$version/Editor/Data/Tools/UnityYAMLMerge.exe" ;;
+    esac
 fi
 if [ ! -f "$tool" ]; then
     echo "unity-yaml-merge: $tool not found, text merge for $path" >&2

@@ -2,7 +2,7 @@
 .SYNOPSIS
     Lanes (README.md beside this script): one checkout and one Unity editor each, so several agents can
     work in parallel. Lane A is the main checkout; lanes B to J are git worktrees at
-    <WorktreeRoot>\<repo>-<id> (default C:\Worktrees). A told agent claims a lane before changing files or
+    <WorktreeRoot>/<repo>-<id> (default C:\Worktrees on Windows, ~/Worktrees elsewhere). A told agent claims a lane before changing files or
     driving Unity; the claim lives in the lane's memory file (lane_<id>-<machine>.md in the repo's Claude
     memory folder), so it travels with the transcripts. Letters are per machine (each has its own lane B);
     the machine name tells them apart wherever lanes are shared: memory files, claims, the table.
@@ -29,7 +29,8 @@
     .lanes.json at the repository root overrides: { "unityProject": "MyGameUnity", "laneAFirst": true,
     "worktreeRoot": "C:/Worktrees", "machines": { "MY-PC": "desk" } }. A repository with no Unity project
     gets lanes without editors. The machine name: -Machine, else $env:LANES_MACHINE, else the
-    COMPUTERNAME's entry in "machines", else the COMPUTERNAME in lower case.
+    computer name's entry in "machines", else the computer name in lower case. Runs on Windows and macOS
+    (PowerShell 7).
     With "registry": "https://…/api" in .lanes.json, claims and lane notes live in that registry (a small web
     service every machine reaches at once) instead of the memory files: see the README.
 #>
@@ -61,14 +62,17 @@ $Requested = if ($Id) { $Id.ToLower() } else { $null }
 $from = if ($Repo) { $Repo } else { (Get-Location).Path }
 $commonDir = git -C $from rev-parse --path-format=absolute --git-common-dir 2>$null
 if (-not $commonDir) { throw "Not in a git repository: $from" }
-$repoRoot = (Split-Path ($commonDir -replace '/', '\') -Parent)
+$repoRoot = Split-Path ([IO.Path]::GetFullPath($commonDir)) -Parent
 $repoName = Split-Path $repoRoot -Leaf
 
 $config = @{}
 $configPath = Join-Path $repoRoot '.lanes.json'
 if (Test-Path $configPath) { $config = Get-Content $configPath -Raw | ConvertFrom-Json -AsHashtable }
 
-$worktreeRoot = if ($config.worktreeRoot) { $config.worktreeRoot -replace '/', '\' } else { 'C:\Worktrees' }
+# A drive-letter root (C:/Worktrees) only means something on Windows; elsewhere the default is used.
+$worktreeRoot = if ($config.worktreeRoot -and ($IsWindows -or $config.worktreeRoot -notmatch '^[A-Za-z]:')) {
+    [IO.Path]::GetFullPath($config.worktreeRoot)
+} elseif ($IsWindows) { 'C:\Worktrees' } else { Join-Path $HOME 'Worktrees' }
 $laneAFirst = if ($config.ContainsKey('laneAFirst')) { [bool]$config.laneAFirst } else { $true }
 $registry = if ($config.registry) { $config.registry.TrimEnd('/') } else { $null }
 $registryRepo = if ($config.registryRepo) { $config.registryRepo } else { ($repoName.ToLower() -replace '[^a-z0-9]+', '-').Trim('-') }
@@ -76,23 +80,25 @@ $registryRepo = if ($config.registryRepo) { $config.registryRepo } else { ($repo
 # This machine's name: lane letters are per machine, so the memory files, claims and messages carry it.
 $machine = if ($Machine) { $Machine }
 elseif ($env:LANES_MACHINE) { $env:LANES_MACHINE }
-elseif ($config.machines -and $config.machines[$env:COMPUTERNAME]) { $config.machines[$env:COMPUTERNAME] }
-else { $env:COMPUTERNAME }
+elseif ($config.machines -and $config.machines[[Environment]::MachineName]) { $config.machines[[Environment]::MachineName] }
+else { [Environment]::MachineName }
 $machine = ($machine.ToLower() -replace '[^a-z0-9]+', '-').Trim('-')
 if (-not $machine) { throw "No machine name: pass -Machine or set LANES_MACHINE" }
 
 # The Unity project, relative to a checkout's root ('' when the root is the project, $null when none).
 $unityProject = if ($UnityProject) { $UnityProject }
 elseif ($config.unityProject) { $config.unityProject }
-elseif (Test-Path (Join-Path $repoRoot 'ProjectSettings\ProjectVersion.txt')) { '' }
+elseif (Test-Path (Join-Path $repoRoot 'ProjectSettings/ProjectVersion.txt')) { '' }
 else {
-    $found = @(Get-ChildItem $repoRoot -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'ProjectSettings\ProjectVersion.txt') })
+    $found = @(Get-ChildItem $repoRoot -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'ProjectSettings/ProjectVersion.txt') })
     if ($found.Count -gt 1) { throw "Several Unity projects in $repoRoot ($($found.Name -join ', ')): pass -UnityProject or set unityProject in .lanes.json" }
     if ($found.Count -eq 1) { $found[0].Name } else { $null }
 }
 $hasUnity = $null -ne $unityProject
 
-$unity = Join-Path $env:LOCALAPPDATA 'Unity\bin\unity.exe'
+# The Unity CLI: where Unity Hub installs it, else whatever `unity` is on the PATH.
+$unity = if ($IsWindows) { Join-Path $env:LOCALAPPDATA 'Unity/bin/unity.exe' } else { Join-Path $HOME '.unity/bin/unity' }
+if (-not (Test-Path $unity)) { $onPath = Get-Command unity -ErrorAction SilentlyContinue; if ($onPath) { $unity = $onPath.Source } }
 $laneIds = if ($laneAFirst) { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' } else { 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j' }
 $allIds = 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'
 
@@ -103,20 +109,20 @@ $allIds = 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'
 # The config dir is $env:CLAUDE_CONFIG_DIR when set (a session runs this script with it set), else ~/.claude. Run by
 # hand from a plain terminal, a custom config dir is unknown: set CLAUDE_CONFIG_DIR, or the default is used.
 function Resolve-MemoryDir {
-    $configDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }
+    $configDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
     $candidates = @(
-        (Join-Path $repoRoot '.claude\settings.local.json')
-        $(if ($unityProject) { Join-Path (Join-Path $repoRoot $unityProject) '.claude\settings.local.json' })
+        (Join-Path $repoRoot '.claude/settings.local.json')
+        $(if ($unityProject) { Join-Path (Join-Path $repoRoot $unityProject) '.claude/settings.local.json' })
         (Join-Path $configDir 'settings.json')
     )
     foreach ($file in $candidates) {
         if (-not $file -or -not (Test-Path $file)) { continue }
         try { $dir = (Get-Content $file -Raw | ConvertFrom-Json).autoMemoryDirectory } catch { continue }
         if (-not $dir) { continue }
-        if ($dir.StartsWith('~')) { $dir = Join-Path $env:USERPROFILE $dir.Substring(1).TrimStart('/', [char]92) }
+        if ($dir.StartsWith('~')) { $dir = Join-Path $HOME $dir.Substring(1).TrimStart('/', [char]92) }
         return [IO.Path]::GetFullPath($dir)
     }
-    Join-Path $configDir "projects\$($repoRoot -replace '[^A-Za-z0-9]', '-')\memory"
+    Join-Path $configDir "projects/$($repoRoot -replace '[^A-Za-z0-9]', '-')/memory"
 }
 $memoryDir = Resolve-MemoryDir
 
@@ -151,7 +157,7 @@ function Lane-Eval([string]$id, [string]$body, [int]$timeoutMs = 120000) {
 $script:registryLegacyHeader = $false
 function Registry-Token {
     if (-not $script:registryToken) {
-        $file = Join-Path $env:USERPROFILE '.lanes-token'
+        $file = Join-Path $HOME '.lanes-token'
         $script:registryToken = if ($env:LANES_TOKEN) { $env:LANES_TOKEN } elseif (Test-Path $file) { (Get-Content $file -Raw).Trim() } else { $null }
         if (-not $script:registryToken) { throw "The lane registry needs its token: put it in $file (or LANES_TOKEN); the README says where it comes from" }
     }
@@ -513,13 +519,25 @@ function Seed-Library([string]$id) {
     if (-not (Test-Path $from)) { Write-Host "Lane A has no Library: the editor will import from scratch"; return }
     Write-Host "Seeding the Library from lane A..."
     # The skipped files name lane A's editor (its port, eval token and process).
-    robocopy $from $to /E /MT:16 /XF *-lock .unity-pipeline-port EditorInstance.json ProtocolInstance.json UnityJigs.LaneFirstStart /NFL /NDL /NJH /NJS /NP | Out-Null
-    if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
+    $skip = '*-lock', '.unity-pipeline-port', 'EditorInstance.json', 'ProtocolInstance.json', 'UnityJigs.LaneFirstStart'
+    if ($IsWindows) {
+        robocopy $from $to /E /MT:16 /XF @skip /NFL /NDL /NJH /NJS /NP | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
+    } elseif ($IsMacOS) {
+        # APFS clones (copy-on-write): near-instant and almost no extra disk. macOS's own rsync (openrsync)
+        # failed mid-copy while lane A's editor was writing its Library.
+        cp -Rc $from $to
+        if ($LASTEXITCODE) { throw "cp failed ($LASTEXITCODE)" }
+        Get-ChildItem $to -Recurse -Force -File -Include $skip | Remove-Item -Force
+    } else {
+        rsync -a @($skip | ForEach-Object { "--exclude=$_" }) "$from/" "$to/"
+        if ($LASTEXITCODE) { throw "rsync failed ($LASTEXITCODE)" }
+    }
 }
 
 function Copy-LocalSettings([string]$id) {
     # Sessions started inside the lane would read these; they pin the Unity CLI to the lane's editor.
-    foreach ($rel in @('.claude\settings.local.json') + $(if ($unityProject) { @("$unityProject\.claude\settings.local.json") } else { @() })) {
+    foreach ($rel in @('.claude/settings.local.json') + $(if ($unityProject) { @("$unityProject/.claude/settings.local.json") } else { @() })) {
         $src = Join-Path $repoRoot $rel
         if (-not (Test-Path $src)) { continue }
         $settings = Get-Content $src -Raw | ConvertFrom-Json -AsHashtable
