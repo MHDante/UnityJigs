@@ -12,7 +12,9 @@ validators and checking things in the editor, so parallel work needs one editor 
   machines (the memory files, so the claims, and anything an agent writes) names a lane with its machine:
   **lane B-desk**, `lane_b-desk.md`. The machine name is `-Machine`, else `$env:LANES_MACHINE`, else the
   computer's entry in `.lanes.json`'s `machines`, else the computer name in lower case. The table lists this
-  machine's lanes only.
+  machine's lanes only. `-Machine` names another machine's lanes for the registry commands (`status`, `claim`,
+  `release`, `note`); `new`, `revive`, `open`, `first-start` and `retire` act on this machine's checkouts and
+  refuse a `-Machine` that names another one (run them on that machine).
 - **Windows and macOS.** `lane.ps1` needs PowerShell 7 (`pwsh`; on a Mac `brew install powershell`). It finds the
   Unity CLI where Unity Hub installs it (`%LOCALAPPDATA%\Unity\bin\unity.exe`, `~/.unity/bin/unity`) or on the
   PATH, seeds a lane's Library with `robocopy` or `rsync`, and keeps worktrees in `C:\Worktrees` or

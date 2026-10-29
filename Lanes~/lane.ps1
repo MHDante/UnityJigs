@@ -29,7 +29,8 @@
     .lanes.json at the repository root overrides: { "unityProject": "MyGameUnity", "laneAFirst": true,
     "worktreeRoot": "C:/Worktrees", "machines": { "MY-PC": "desk" } }. A repository with no Unity project
     gets lanes without editors. The machine name: -Machine, else $env:LANES_MACHINE, else the
-    computer name's entry in "machines", else the computer name in lower case. Runs on Windows and macOS
+    computer name's entry in "machines", else the computer name in lower case. new, revive, open,
+    first-start and retire act on this machine's checkouts: they refuse a -Machine naming another machine. Runs on Windows and macOS
     (PowerShell 7).
     With "registry": "https://…/api" in .lanes.json, claims and lane notes live in that registry (a small web
     service every machine reaches at once) instead of the memory files: see the README.
@@ -78,12 +79,16 @@ $registry = if ($config.registry) { $config.registry.TrimEnd('/') } else { $null
 $registryRepo = if ($config.registryRepo) { $config.registryRepo } else { ($repoName.ToLower() -replace '[^a-z0-9]+', '-').Trim('-') }
 
 # This machine's name: lane letters are per machine, so the memory files, claims and messages carry it.
-$machine = if ($Machine) { $Machine }
-elseif ($env:LANES_MACHINE) { $env:LANES_MACHINE }
-elseif ($config.machines -and $config.machines[[Environment]::MachineName]) { $config.machines[[Environment]::MachineName] }
-else { [Environment]::MachineName }
-$machine = ($machine.ToLower() -replace '[^a-z0-9]+', '-').Trim('-')
+# -Machine names another machine's lanes in the registry; the commands that act on a checkout refuse it.
+function Machine-Key([string]$name) { if ($name) { ($name.ToLower() -replace '[^a-z0-9]+', '-').Trim('-') } }
+$localMachine = Machine-Key $(if ($env:LANES_MACHINE) { $env:LANES_MACHINE }
+    elseif ($config.machines -and $config.machines[[Environment]::MachineName]) { $config.machines[[Environment]::MachineName] }
+    else { [Environment]::MachineName })
+$machine = if ($Machine) { Machine-Key $Machine } else { $localMachine }
 if (-not $machine) { throw "No machine name: pass -Machine or set LANES_MACHINE" }
+if ($Command -in 'new', 'revive', 'open', 'first-start', 'retire' -and $machine -ne $localMachine) {
+    throw "$Command acts on this machine's checkout ($localMachine); run it on $machine"
+}
 
 # The Unity project, relative to a checkout's root ('' when the root is the project, $null when none).
 $unityProject = if ($UnityProject) { $UnityProject }
