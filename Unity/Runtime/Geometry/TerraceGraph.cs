@@ -380,28 +380,57 @@ namespace UnityJigs.Geometry
 
         /// <summary>Simplifies every chain at `epsilon` (≤ 0 copies): closed loops as PolygonSimplify does, open chains
         /// end to end.</summary>
-        public void Simplify(float epsilon)
+        public void Simplify(float epsilon) => Simplify(epsilon, null, null);
+
+        /// <summary>
+        /// As above, each chain at `epsilon` × `scale(left, right)` (null = 1), then every simplified edge longer than
+        /// `maxEdge(left, right)` (null or ≤ 0 = never) cut into equal pieces no longer than it (points on the edge).
+        /// </summary>
+        public void Simplify(float epsilon, System.Func<int, int, float>? scale, System.Func<int, int, float>? maxEdge)
         {
             foreach (var chain in Chains)
             {
-                if (chain.Closed)
+                var eps = scale == null ? epsilon : epsilon * scale(chain.Left, chain.Right);
+                if (chain.Closed) PolygonSimplify.SimplifyClosed(chain.Points, eps, chain.Simple);
+                else
                 {
-                    PolygonSimplify.SimplifyClosed(chain.Points, epsilon, chain.Simple);
-                    continue;
+                    var pts = chain.Points;
+                    chain.Simple.Clear();
+                    if (eps <= 0f || pts.Count < 3) chain.Simple.AddRange(pts);
+                    else
+                    {
+                        var keep = new bool[pts.Count];
+                        keep[0] = keep[pts.Count - 1] = true;
+                        Recurse(pts, 0, pts.Count - 1, eps, keep);
+                        for (var i = 0; i < pts.Count; i++)
+                            if (keep[i]) chain.Simple.Add(pts[i]);
+                    }
                 }
-                var pts = chain.Points;
-                chain.Simple.Clear();
-                if (epsilon <= 0f || pts.Count < 3)
-                {
-                    chain.Simple.AddRange(pts);
-                    continue;
-                }
-                var keep = new bool[pts.Count];
-                keep[0] = keep[pts.Count - 1] = true;
-                Recurse(pts, 0, pts.Count - 1, epsilon, keep);
-                for (var i = 0; i < pts.Count; i++)
-                    if (keep[i]) chain.Simple.Add(pts[i]);
+                var max = maxEdge?.Invoke(chain.Left, chain.Right) ?? 0f;
+                if (max > 0f) SplitLong(chain, max);
             }
+        }
+
+        private static void SplitLong(Chain chain, float maxEdge)
+        {
+            var src = chain.Simple;
+            var n = chain.Closed ? src.Count : src.Count - 1;
+            var any = false;
+            for (var i = 0; i < n && !any; i++)
+                any = (src[(i + 1) % src.Count] - src[i]).magnitude > maxEdge;
+            if (!any) return;
+            var result = new List<Vector2>(src.Count * 2);
+            for (var i = 0; i < src.Count; i++)
+            {
+                result.Add(src[i]);
+                if (i >= n) continue;
+                var a = src[i];
+                var b = src[(i + 1) % src.Count];
+                var pieces = Mathf.CeilToInt((b - a).magnitude / maxEdge - 1e-4f);
+                for (var k = 1; k < pieces; k++) result.Add(Vector2.Lerp(a, b, k / (float)pieces));
+            }
+            src.Clear();
+            src.AddRange(result);
         }
 
         private static void Recurse(List<Vector2> pts, int a, int b, float epsilon, bool[] keep)

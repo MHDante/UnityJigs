@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -10,21 +11,29 @@ namespace UnityJigs.Geometry
         public float Bottom, Top;
         public int Part;
         public TerraceFaces Faces;
+        public TerraceSliceFlags Flags;
 
-        /// <summary>Hides a neighbouring column's walls where it covers them (a solid seen from beside).</summary>
+        /// <summary>Hides a neighbouring column's walls where it covers them (unless <see cref="TerraceMesher.Options.Hides"/>
+        /// decides otherwise).</summary>
         public bool HidesWalls;
 
-        public TerraceSlice(float bottom, float top, int part, TerraceFaces faces = TerraceFaces.All, bool hidesWalls = true)
+        /// <summary>The caller's own data (an index into its tables, an owner…): the mesher never reads it.</summary>
+        public int Tag;
+
+        public TerraceSlice(float bottom, float top, int part, TerraceFaces faces = TerraceFaces.All, bool hidesWalls = true,
+            TerraceSliceFlags flags = TerraceSliceFlags.None, int tag = 0)
         {
             Bottom = bottom;
             Top = top;
             Part = part;
             Faces = faces;
             HidesWalls = hidesWalls;
+            Flags = flags;
+            Tag = tag;
         }
     }
 
-    [System.Flags]
+    [Flags]
     public enum TerraceFaces
     {
         None = 0,
@@ -32,6 +41,21 @@ namespace UnityJigs.Geometry
         Bottom = 2,
         Walls = 4,
         All = Top | Bottom | Walls,
+    }
+
+    [Flags]
+    public enum TerraceSliceFlags
+    {
+        None = 0,
+        /// <summary>The slice's top moves by the column's <see cref="TerraceMesher.Options.Lift"/> (a chamfer).</summary>
+        LiftTop = 1,
+        /// <summary>The slice's bottom moves by the lift too (a slab that keeps its thickness on a chamfer).</summary>
+        LiftBottom = 2,
+        /// <summary>A SKIRT: walls only, from the top of the column across (when it is not empty and lower) up to this
+        /// slice's Top — closes the gap under a column that floats beside a lower one. Bottom is ignored.</summary>
+        Skirt = 4,
+        /// <summary>Not part of the column's surface (a block standing on it): skirts across measure to below it.</summary>
+        NotSurface = 8,
     }
 
     /// <summary>
@@ -45,11 +69,66 @@ namespace UnityJigs.Geometry
     /// area that border one other label only are dropped (that label takes the area).
     /// <para>A grid with one non-empty label whose column is one slice [−thickness, 0] gives exactly
     /// <see cref="MaskMesher"/>'s slab (same vertices, same order).</para>
+    /// <para>Options add: per-border simplification scale and long-edge splitting, a wall-hiding rule, skirts, a per-vertex
+    /// LIFT (sloped tops — chamfers: the top's height then varies across a region, walls follow it at each end, normals
+    /// are the faces'), and per-vertex extra data (uv1 = position + offset, uv2 from a callback) on chosen parts.</para>
     /// </summary>
     public static class TerraceMesher
     {
         /// <summary>An edit of the traced graph before it is simplified (e.g. <see cref="TerraceGraph.Subtract"/>).</summary>
         public delegate void GraphEdit(TerraceGraph graph);
+
+        public enum FaceKinds
+        {
+            Top,
+            Bottom,
+            Wall,
+        }
+
+        /// <summary>What a vertex is, for <see cref="Options.Uv2"/>.</summary>
+        public struct VertexContext
+        {
+            public FaceKinds Face;
+            public int Label;
+            public TerraceSlice Slice;
+            /// <summary>Walls: the label across the edge; else 0.</summary>
+            public int Across;
+            /// <summary>The vertex (mesh space).</summary>
+            public Vector3 Position;
+            /// <summary>Walls: the slice's top at this vertex (lift included).</summary>
+            public float SliceTop;
+            /// <summary>Walls: the edge's ends (x, z), from → to.</summary>
+            public Vector2 EdgeFrom, EdgeTo;
+        }
+
+        public sealed class Options
+        {
+            public float Roughness;
+            public float MinLoopAreaCells = 1.5f;
+            public GraphEdit? Edit;
+
+            /// <summary>Per border (left label, right label): its share of the roughness (1 = all of it).</summary>
+            public Func<int, int, float>? RoughnessScale;
+
+            /// <summary>Per border (left label, right label): edges longer than this (metres) get extra points (≤ 0 =
+            /// never).</summary>
+            public Func<int, int, float>? MaxEdge;
+
+            /// <summary>Does slice `across` hide a wall of slice `mine` where it covers it? Default: across.HidesWalls.</summary>
+            public Func<TerraceSlice, TerraceSlice, bool>? Hides;
+
+            /// <summary>The lift (added height) of label's lifting slices at a point; null = none anywhere.</summary>
+            public Func<int, Vector2, float>? Lift;
+
+            /// <summary>A lifting label's top is refined (TriangleRefine) to edges no longer than this, metres (0 = not):
+            /// the slope is then sampled at well-shaped triangles. Its outline should already be split as finely.</summary>
+            public float RefineLifted;
+
+            /// <summary>Parts that carry uv1 (position + Uv1Offset) and uv2 (this callback): the rest carry neither.</summary>
+            public Func<int, bool>? PartHasUv12;
+            public Vector3 Uv1Offset;
+            public Func<VertexContext, Vector4>? Uv2;
+        }
 
         public struct Result
         {
@@ -73,12 +152,20 @@ namespace UnityJigs.Geometry
             public readonly List<Vector3> Vertices = new();
             public readonly List<Vector3> Normals = new();
             public readonly List<Vector2> Uvs = new();
+            public readonly List<Vector4> Uv1 = new();
+            public readonly List<Vector4> Uv2 = new();
             public readonly List<int> Triangles = new();
+            public bool HasUv12;
 
-            internal readonly List<int> TopTris = new(), BottomTris = new(), WallTris = new();
-            internal readonly List<Vector3> TopV = new(), BottomV = new(), WallV = new();
-            internal readonly List<Vector3> TopN = new(), BottomN = new(), WallN = new();
-            internal readonly List<Vector2> TopUv = new(), BottomUv = new(), WallUv = new();
+            internal readonly Section Tops = new(), Bottoms = new(), Walls = new();
+
+            internal sealed class Section
+            {
+                public readonly List<Vector3> V = new(), N = new();
+                public readonly List<Vector2> Uv = new();
+                public readonly List<Vector4> Uv1 = new(), Uv2 = new();
+                public readonly List<int> Tris = new();
+            }
 
             public bool IsEmpty => Triangles.Count == 0;
 
@@ -88,33 +175,91 @@ namespace UnityJigs.Geometry
                 Vertices.Clear();
                 Normals.Clear();
                 Uvs.Clear();
+                Uv1.Clear();
+                Uv2.Clear();
                 Triangles.Clear();
-                Append(TopV, TopN, TopUv, TopTris);
-                Append(BottomV, BottomN, BottomUv, BottomTris);
-                Append(WallV, WallN, WallUv, WallTris);
+                Append(Tops);
+                Append(Bottoms);
+                Append(Walls);
             }
 
-            private void Append(List<Vector3> v, List<Vector3> n, List<Vector2> uv, List<int> tris)
+            private void Append(Section s)
             {
                 var offset = Vertices.Count;
-                Vertices.AddRange(v);
-                Normals.AddRange(n);
-                Uvs.AddRange(uv);
-                foreach (var t in tris) Triangles.Add(t + offset);
+                Vertices.AddRange(s.V);
+                Normals.AddRange(s.N);
+                Uvs.AddRange(s.Uv);
+                Uv1.AddRange(s.Uv1);
+                Uv2.AddRange(s.Uv2);
+                foreach (var t in s.Tris) Triangles.Add(t + offset);
             }
 
             /// <summary>Writes the part into `mesh` (cleared first): one submesh, tangents, bounds.</summary>
-            public void WriteTo(Mesh mesh)
+            public void WriteTo(Mesh mesh) => WriteSubmeshes(mesh, new[] { this });
+
+            /// <summary>Appends another (finished) part's faces after this one's (e.g. a second build into the same
+            /// output).</summary>
+            public void AppendFrom(Part other)
             {
-                mesh.Clear();
-                mesh.indexFormat = Vertices.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
-                mesh.SetVertices(Vertices);
-                mesh.SetNormals(Normals);
-                mesh.SetUVs(0, Uvs);
-                mesh.SetTriangles(Triangles, 0);
-                mesh.RecalculateTangents(); // normal-mapped materials (URP/Lit) need them
-                mesh.RecalculateBounds();
+                var offset = Vertices.Count;
+                Vertices.AddRange(other.Vertices);
+                Normals.AddRange(other.Normals);
+                Uvs.AddRange(other.Uvs);
+                if (HasUv12 && other.HasUv12)
+                {
+                    Uv1.AddRange(other.Uv1);
+                    Uv2.AddRange(other.Uv2);
+                }
+                foreach (var t in other.Triangles) Triangles.Add(t + offset);
             }
+        }
+
+        /// <summary>Writes `parts` into `mesh` (cleared first) as one submesh each, in order: shared vertex lists, tangents,
+        /// bounds. uv1 / uv2 are written when every part carries them.</summary>
+        public static void WriteSubmeshes(Mesh mesh, IReadOnlyList<Part> parts)
+        {
+            var verts = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var uv1 = new List<Vector4>();
+            var uv2 = new List<Vector4>();
+            var withUv12 = parts.Count > 0;
+            foreach (var p in parts) withUv12 &= p.HasUv12;
+            var starts = new int[parts.Count];
+            for (var i = 0; i < parts.Count; i++)
+            {
+                starts[i] = verts.Count;
+                verts.AddRange(parts[i].Vertices);
+                normals.AddRange(parts[i].Normals);
+                uvs.AddRange(parts[i].Uvs);
+                if (!withUv12) continue;
+                uv1.AddRange(parts[i].Uv1);
+                uv2.AddRange(parts[i].Uv2);
+            }
+            mesh.Clear();
+            mesh.indexFormat = verts.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetUVs(0, uvs);
+            if (withUv12)
+            {
+                mesh.SetUVs(1, uv1);
+                mesh.SetUVs(2, uv2);
+            }
+            mesh.subMeshCount = parts.Count;
+            for (var i = 0; i < parts.Count; i++)
+            {
+                if (starts[i] == 0)
+                {
+                    mesh.SetTriangles(parts[i].Triangles, i);
+                    continue;
+                }
+                var tris = new List<int>(parts[i].Triangles.Count);
+                foreach (var t in parts[i].Triangles) tris.Add(t + starts[i]);
+                mesh.SetTriangles(tris, i);
+            }
+            mesh.RecalculateTangents(); // normal-mapped materials (URP/Lit) need them
+            mesh.RecalculateBounds();
         }
 
         /// <summary>
@@ -125,28 +270,29 @@ namespace UnityJigs.Geometry
         public static Result Build(int[] labels, int width, int height, float cellSize, Vector2 origin, float roughness,
             IReadOnlyList<TerraceSlice[]?> columns, int partCount, out Part[] parts, GraphEdit? edit = null,
             float minLoopAreaCells = 1.5f) =>
-            Build(TerraceGraph.Trace(labels, width, height, cellSize, origin), roughness, columns, partCount, out parts,
-                edit, minLoopAreaCells);
+            Build(TerraceGraph.Trace(labels, width, height, cellSize, origin), columns, partCount, out parts,
+                new Options { Roughness = roughness, Edit = edit, MinLoopAreaCells = minLoopAreaCells });
 
         /// <summary>As above on an already traced graph (it is edited, simplified and marked by the build).</summary>
-        public static Result Build(TerraceGraph graph, float roughness, IReadOnlyList<TerraceSlice[]?> columns,
-            int partCount, out Part[] parts, GraphEdit? edit = null, float minLoopAreaCells = 1.5f)
+        public static Result Build(TerraceGraph graph, IReadOnlyList<TerraceSlice[]?> columns, int partCount,
+            out Part[] parts, Options options)
         {
             var result = new Result { SaddlesFilled = graph.SaddlesFilled };
             parts = new Part[partCount];
-            for (var i = 0; i < partCount; i++) parts[i] = new Part();
-            edit?.Invoke(graph);
+            for (var i = 0; i < partCount; i++)
+                parts[i] = new Part { HasUv12 = options.PartHasUv12 != null && options.PartHasUv12(i) };
+            options.Edit?.Invoke(graph);
             result.Chains = graph.Chains.Count;
             foreach (var c in graph.Chains)
                 if (!c.Closed) result.OpenChains++;
 
             var cellSize = graph.CellSize;
-            var minArea = minLoopAreaCells * cellSize * cellSize;
-            var eps = Mathf.Max(0f, roughness);
+            var minArea = options.MinLoopAreaCells * cellSize * cellSize;
+            var eps = Mathf.Max(0f, options.Roughness);
             List<Region>? regions;
             while (true)
             {
-                if (TryBuild(graph, eps, minArea, out regions, ref result)) break;
+                if (TryBuild(graph, eps, minArea, options, out regions, ref result)) break;
                 if (eps <= 0f)
                 {
                     result.Success = false;
@@ -155,7 +301,7 @@ namespace UnityJigs.Geometry
                 eps = eps < cellSize * 0.05f ? 0f : eps * 0.5f;
             }
             result.Roughness = eps;
-            Write(regions!, columns, parts);
+            new Writer(columns, parts, options).Write(regions!);
             foreach (var p in parts)
             {
                 p.Finish();
@@ -175,12 +321,12 @@ namespace UnityJigs.Geometry
             public readonly List<int> Triangles = new();
         }
 
-        private static bool TryBuild(TerraceGraph graph, float eps, float minArea, out List<Region>? regions,
-            ref Result result)
+        private static bool TryBuild(TerraceGraph graph, float eps, float minArea, Options options,
+            out List<Region>? regions, ref Result result)
         {
             regions = null;
             foreach (var c in graph.Chains) c.Dropped = false;
-            graph.Simplify(eps);
+            graph.Simplify(eps, options.RoughnessScale, options.MaxEdge);
             var labels = graph.Labels();
 
             // Loops that collapse (< 3 points, or under the minimum area) and border one other label only are dropped:
@@ -258,129 +404,298 @@ namespace UnityJigs.Geometry
 
         private static readonly TerraceSlice[] NoSlices = new TerraceSlice[0];
 
-        private static TerraceSlice[] ColumnOf(IReadOnlyList<TerraceSlice[]?> columns, int label) =>
-            label > 0 && label < columns.Count && columns[label] != null ? columns[label]! : NoSlices;
+        // A wall end shorter than this (metres) has shrunk to nothing.
+        private const float MinWall = 1e-4f;
 
-        private static void Write(List<Region> regions, IReadOnlyList<TerraceSlice[]?> columns, Part[] parts)
+        private sealed class Writer
         {
-            var intervals = new List<(float lo, float hi)>();
-            foreach (var region in regions)
+            private readonly IReadOnlyList<TerraceSlice[]?> _columns;
+            private readonly Part[] _parts;
+            private readonly Options _o;
+            private readonly List<(float lo, float hi)> _a = new(), _b = new();
+
+            public Writer(IReadOnlyList<TerraceSlice[]?> columns, Part[] parts, Options options)
             {
-                var column = ColumnOf(columns, region.Label);
-                foreach (var slice in column)
+                _columns = columns;
+                _parts = parts;
+                _o = options;
+            }
+
+            private TerraceSlice[] ColumnOf(int label) =>
+                label > 0 && label < _columns.Count && _columns[label] != null ? _columns[label]! : NoSlices;
+
+            private float Lift(int label, Vector2 p) => _o.Lift == null ? 0f : _o.Lift(label, p);
+
+            // The slice's top / bottom at a point (its lift applied when it lifts).
+            private float TopAt(int label, TerraceSlice s, Vector2 p) =>
+                (s.Flags & TerraceSliceFlags.LiftTop) != 0 ? s.Top + Lift(label, p) : s.Top;
+
+            private float BottomAt(int label, TerraceSlice s, Vector2 p) =>
+                (s.Flags & TerraceSliceFlags.LiftBottom) != 0 ? s.Bottom + Lift(label, p) : s.Bottom;
+
+            public void Write(List<Region> regions)
+            {
+                foreach (var region in regions)
                 {
-                    var part = parts[slice.Part];
-                    var thick = slice.Top - slice.Bottom > 0f;
-                    // Top: 2D triangles are counter-clockwise; Unity front faces are clockwise seen from the normal's side.
-                    if ((slice.Faces & TerraceFaces.Top) != 0)
-                    {
-                        var at = part.TopV.Count;
-                        foreach (var p in region.Vertices)
-                        {
-                            part.TopV.Add(new Vector3(p.x, slice.Top, p.y));
-                            part.TopN.Add(Vector3.up);
-                            part.TopUv.Add(p);
-                        }
-                        for (var i = 0; i < region.Triangles.Count; i += 3)
-                        {
-                            part.TopTris.Add(at + region.Triangles[i]);
-                            part.TopTris.Add(at + region.Triangles[i + 2]);
-                            part.TopTris.Add(at + region.Triangles[i + 1]);
-                        }
-                    }
-                    if (thick && (slice.Faces & TerraceFaces.Bottom) != 0)
-                    {
-                        var at = part.BottomV.Count;
-                        foreach (var p in region.Vertices)
-                        {
-                            part.BottomV.Add(new Vector3(p.x, slice.Top, p.y) + new Vector3(0, slice.Bottom - slice.Top, 0));
-                            part.BottomN.Add(Vector3.down);
-                            part.BottomUv.Add(p);
-                        }
-                        for (var i = 0; i < region.Triangles.Count; i += 3)
-                        {
-                            part.BottomTris.Add(at + region.Triangles[i]);
-                            part.BottomTris.Add(at + region.Triangles[i + 1]);
-                            part.BottomTris.Add(at + region.Triangles[i + 2]);
-                        }
-                    }
-                }
-                // Walls: every loop keeps the label on its left, so each edge's wall faces right — over the heights where
-                // this column is solid and the one across is not.
-                foreach (var loop in region.Loops)
-                {
-                    var pts = loop.Points;
-                    for (var i = 0; i < pts.Count; i++)
-                    {
-                        var a2 = pts[i];
-                        var b2 = pts[(i + 1) % pts.Count];
-                        var d = b2 - a2;
-                        if (d.sqrMagnitude < 1e-12f) continue;
-                        var across = ColumnOf(columns, loop.Across[i]);
-                        var n = new Vector3(d.y, 0, -d.x).normalized;
+                    var column = ColumnOf(region.Label);
+                    if (_o.Lift != null && _o.RefineLifted > 0f)
                         foreach (var slice in column)
+                            if ((slice.Flags & (TerraceSliceFlags.LiftTop | TerraceSliceFlags.LiftBottom)) != 0)
+                            {
+                                TriangleRefine.Refine(region.Vertices, region.Triangles, _o.RefineLifted);
+                                break;
+                            }
+                    foreach (var slice in column)
+                    {
+                        if ((slice.Flags & TerraceSliceFlags.Skirt) != 0) continue;
+                        var part = _parts[slice.Part];
+                        var thick = slice.Top - slice.Bottom > 0f;
+                        if ((slice.Faces & TerraceFaces.Top) != 0) Cap(part.Tops, part, region, slice, top: true);
+                        if (thick && (slice.Faces & TerraceFaces.Bottom) != 0) Cap(part.Bottoms, part, region, slice, top: false);
+                    }
+                    // Walls: every loop keeps the label on its left, so each edge's wall faces right — over the heights
+                    // where this column is solid and the one across is not.
+                    foreach (var loop in region.Loops)
+                    {
+                        var pts = loop.Points;
+                        for (var i = 0; i < pts.Count; i++)
                         {
-                            if ((slice.Faces & TerraceFaces.Walls) == 0 || !(slice.Top - slice.Bottom > 0f)) continue;
-                            Uncovered(slice, across, intervals);
-                            var part = parts[slice.Part];
-                            foreach (var (lo, hi) in intervals) Wall(part, a2, b2, n, lo, hi, slice.Top);
+                            var a2 = pts[i];
+                            var b2 = pts[(i + 1) % pts.Count];
+                            var d = b2 - a2;
+                            if (d.sqrMagnitude < 1e-12f) continue;
+                            var acrossLabel = loop.Across[i];
+                            var across = ColumnOf(acrossLabel);
+                            var n = new Vector3(d.y, 0, -d.x).normalized;
+                            foreach (var slice in column)
+                            {
+                                if ((slice.Faces & TerraceFaces.Walls) == 0) continue;
+                                var part = _parts[slice.Part];
+                                if ((slice.Flags & TerraceSliceFlags.Skirt) != 0)
+                                {
+                                    Skirt(part, region.Label, slice, across, acrossLabel, a2, b2, n);
+                                    continue;
+                                }
+                                if (!(slice.Top - slice.Bottom > 0f)) continue;
+                                if (_o.Lift == null)
+                                {
+                                    // Flat: one interval set for the whole edge (MaskMesher's exact floats).
+                                    Uncovered(slice, slice.Bottom, slice.Top, across, acrossLabel, a2, _a);
+                                    foreach (var (lo, hi) in _a)
+                                        Wall(part, region.Label, slice, acrossLabel, a2, b2, n, lo, hi, lo, hi, slice.Top,
+                                            slice.Top);
+                                    continue;
+                                }
+                                // Lifted: the intervals at each end, paired in order.
+                                float ta = TopAt(region.Label, slice, a2), tb = TopAt(region.Label, slice, b2);
+                                Uncovered(slice, BottomAt(region.Label, slice, a2), ta, across, acrossLabel, a2, _a);
+                                Uncovered(slice, BottomAt(region.Label, slice, b2), tb, across, acrossLabel, b2, _b);
+                                Pair(part, region.Label, slice, acrossLabel, a2, b2, n, ta, tb);
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // The parts of `slice` no slice of the column across covers (that hides walls).
-        private static void Uncovered(TerraceSlice slice, TerraceSlice[] across, List<(float lo, float hi)> into)
-        {
-            into.Clear();
-            into.Add((slice.Bottom, slice.Top));
-            foreach (var other in across)
+            // A top (or bottom) over the region. Flat (no lift): MaskMesher's exact vertices, normal straight up / down.
+            // Lifted: heights per vertex; each vertex's normal = the area-weighted normal of its triangles.
+            private void Cap(Part.Section s, Part part, Region region, TerraceSlice slice, bool top)
             {
-                if (!other.HidesWalls || !(other.Top > other.Bottom)) continue;
-                for (var k = into.Count - 1; k >= 0; k--)
+                var at = s.V.Count;
+                var lifts = (slice.Flags & (top ? TerraceSliceFlags.LiftTop : TerraceSliceFlags.LiftBottom)) != 0 &&
+                            _o.Lift != null;
+                var any = false;
+                foreach (var p in region.Vertices)
                 {
-                    var (lo, hi) = into[k];
-                    if (other.Top <= lo || other.Bottom >= hi) continue;
-                    into.RemoveAt(k);
-                    if (other.Top < hi) into.Insert(k, (other.Top, hi));
-                    if (other.Bottom > lo) into.Insert(k, (lo, other.Bottom));
+                    Vector3 v;
+                    if (top) v = new Vector3(p.x, slice.Top, p.y);
+                    else v = new Vector3(p.x, slice.Top, p.y) + new Vector3(0, slice.Bottom - slice.Top, 0);
+                    if (lifts)
+                    {
+                        var l = Lift(region.Label, p);
+                        if (l != 0f)
+                        {
+                            v.y += l;
+                            any = true;
+                        }
+                    }
+                    s.V.Add(v);
+                    s.N.Add(top ? Vector3.up : Vector3.down);
+                    s.Uv.Add(p);
+                    if (part.HasUv12) AddUv12(s, top ? FaceKinds.Top : FaceKinds.Bottom, region.Label, slice, 0, v,
+                        default, default, 0f);
+                }
+                var tris = region.Triangles;
+                for (var i = 0; i < tris.Count; i += 3)
+                {
+                    if (top)
+                    {
+                        s.Tris.Add(at + tris[i]);
+                        s.Tris.Add(at + tris[i + 2]);
+                        s.Tris.Add(at + tris[i + 1]);
+                    }
+                    else
+                    {
+                        s.Tris.Add(at + tris[i]);
+                        s.Tris.Add(at + tris[i + 1]);
+                        s.Tris.Add(at + tris[i + 2]);
+                    }
+                }
+                if (!any) return;
+                // Sloped somewhere: normals from the faces (Unity winding: clockwise seen from the front).
+                for (var i = at; i < s.N.Count; i++) s.N[i] = Vector3.zero;
+                for (var i = 0; i < tris.Count; i += 3)
+                {
+                    int a = at + tris[i], b = at + tris[i + 1], c = at + tris[i + 2];
+                    var n = Vector3.Cross(s.V[c] - s.V[a], s.V[b] - s.V[a]); // CCW in xz = up
+                    if (!top) n = -n;
+                    s.N[a] += n;
+                    s.N[b] += n;
+                    s.N[c] += n;
+                }
+                for (var i = at; i < s.N.Count; i++)
+                    s.N[i] = s.N[i].sqrMagnitude > 1e-20f ? s.N[i].normalized : top ? Vector3.up : Vector3.down;
+            }
+
+            // The parts of [lo, hi] of `slice` no slice of the column across covers (that hides it) — at point p (lifts).
+            private void Uncovered(TerraceSlice slice, float lo0, float hi0, TerraceSlice[] across, int acrossLabel,
+                Vector2 p, List<(float lo, float hi)> into)
+            {
+                into.Clear();
+                if (!(hi0 > lo0)) return;
+                into.Add((lo0, hi0));
+                foreach (var other in across)
+                {
+                    if ((other.Flags & TerraceSliceFlags.Skirt) != 0) continue;
+                    if (!(_o.Hides?.Invoke(slice, other) ?? other.HidesWalls)) continue;
+                    var ob = _o.Lift == null ? other.Bottom : BottomAt(acrossLabel, other, p);
+                    var ot = _o.Lift == null ? other.Top : TopAt(acrossLabel, other, p);
+                    if (!(ot > ob)) continue;
+                    for (var k = into.Count - 1; k >= 0; k--)
+                    {
+                        var (lo, hi) = into[k];
+                        if (ot <= lo || ob >= hi) continue;
+                        into.RemoveAt(k);
+                        if (ot < hi) into.Insert(k, (ot, hi));
+                        if (ob > lo) into.Insert(k, (lo, ob));
+                    }
                 }
             }
-        }
 
-        // One wall quad from a2 → b2 between heights lo and hi (MaskMesher's vertex order: top a, top b, bottom b,
-        // bottom a). Heights as MaskMesher writes them: the slice top, then down from it.
-        private static void Wall(Part part, Vector2 a2, Vector2 b2, Vector3 n, float lo, float hi, float top)
-        {
-            var at = new Vector3(a2.x, top, a2.y);
-            var bt = new Vector3(b2.x, top, b2.y);
-            var lower = new Vector3(0, lo - top, 0);
-            var w = part.WallV.Count;
-            if (hi == top)
+            // Lifted walls: the k-th interval at a with the k-th at b (an interval missing at one end closes to a point
+            // there: the wall tapers to nothing — e.g. where a chamfer meets the riser it replaces).
+            private void Pair(Part part, int label, TerraceSlice slice, int across, Vector2 a2, Vector2 b2, Vector3 n,
+                float topA, float topB)
             {
-                part.WallV.Add(at);
-                part.WallV.Add(bt);
+                var count = Mathf.Max(_a.Count, _b.Count);
+                for (var k = 0; k < count; k++)
+                {
+                    // A missing interval closes at the slice's top there (the side tapers up to it).
+                    (float lo, float hi) ia = k < _a.Count ? _a[k] : (topA, topA);
+                    (float lo, float hi) ib = k < _b.Count ? _b[k] : (topB, topB);
+                    if (!(ia.hi - ia.lo > MinWall) && !(ib.hi - ib.lo > MinWall)) continue;
+                    Wall(part, label, slice, across, a2, b2, n, ia.lo, ia.hi, ib.lo, ib.hi, topA, topB);
+                }
             }
-            else
+
+            // A skirt along one edge: from the top of the column across (when not empty and below) up to the slice's top.
+            private void Skirt(Part part, int label, TerraceSlice slice, TerraceSlice[] across, int acrossLabel, Vector2 a2,
+                Vector2 b2, Vector3 n)
             {
-                var upper = new Vector3(0, hi - top, 0);
-                part.WallV.Add(at + upper);
-                part.WallV.Add(bt + upper);
+                float SurfaceAt(Vector2 p)
+                {
+                    var top = float.NegativeInfinity;
+                    foreach (var o in across)
+                        if ((o.Flags & (TerraceSliceFlags.Skirt | TerraceSliceFlags.NotSurface)) == 0)
+                            top = Mathf.Max(top, _o.Lift == null ? o.Top : TopAt(acrossLabel, o, p));
+                    return top;
+                }
+                var ta = SurfaceAt(a2);
+                var tb = SurfaceAt(b2);
+                if (float.IsNegativeInfinity(ta) || float.IsNegativeInfinity(tb)) return; // nothing across: no skirt
+                float ha = TopAt(label, slice, a2), hb = TopAt(label, slice, b2);
+                if (!(ha > ta) && !(hb > tb)) return;
+                Wall(part, label, slice, acrossLabel, a2, b2, n, Mathf.Min(ta, ha), ha, Mathf.Min(tb, hb), hb, ha, hb);
             }
-            part.WallV.Add(bt + lower);
-            part.WallV.Add(at + lower);
-            for (var k = 0; k < 4; k++) part.WallN.Add(n);
-            part.WallUv.Add(a2);
-            part.WallUv.Add(b2);
-            part.WallUv.Add(b2);
-            part.WallUv.Add(a2);
-            part.WallTris.Add(w);
-            part.WallTris.Add(w + 1);
-            part.WallTris.Add(w + 2);
-            part.WallTris.Add(w);
-            part.WallTris.Add(w + 2);
-            part.WallTris.Add(w + 3);
+
+            // One wall quad from a2 → b2 between heights [loA, hiA] at a and [loB, hiB] at b (MaskMesher's vertex order:
+            // top a, top b, bottom b, bottom a). A flat wall's heights are written as MaskMesher writes them: the slice
+            // top, then down from it.
+            private void Wall(Part part, int label, TerraceSlice slice, int across, Vector2 a2, Vector2 b2, Vector3 n,
+                float loA, float hiA, float loB, float hiB, float topA, float topB)
+            {
+                var s = part.Walls;
+                var w = s.V.Count;
+                Vector3 ua, ub, la, lb;
+                if (topA == topB && hiA == hiB && loA == loB)
+                {
+                    var at = new Vector3(a2.x, topA, a2.y);
+                    var bt = new Vector3(b2.x, topA, b2.y);
+                    if (hiA == topA)
+                    {
+                        ua = at;
+                        ub = bt;
+                    }
+                    else
+                    {
+                        var upper = new Vector3(0, hiA - topA, 0);
+                        ua = at + upper;
+                        ub = bt + upper;
+                    }
+                    var lower = new Vector3(0, loA - topA, 0);
+                    la = at + lower;
+                    lb = bt + lower;
+                }
+                else
+                {
+                    ua = new Vector3(a2.x, hiA, a2.y);
+                    ub = new Vector3(b2.x, hiB, b2.y);
+                    la = new Vector3(a2.x, loA, a2.y);
+                    lb = new Vector3(b2.x, loB, b2.y);
+                }
+                s.V.Add(ua);
+                s.V.Add(ub);
+                s.V.Add(lb);
+                s.V.Add(la);
+                for (var k = 0; k < 4; k++) s.N.Add(n);
+                s.Uv.Add(a2);
+                s.Uv.Add(b2);
+                s.Uv.Add(b2);
+                s.Uv.Add(a2);
+                if (part.HasUv12)
+                {
+                    AddUv12(s, FaceKinds.Wall, label, slice, across, ua, a2, b2, topA);
+                    AddUv12(s, FaceKinds.Wall, label, slice, across, ub, a2, b2, topB);
+                    AddUv12(s, FaceKinds.Wall, label, slice, across, lb, a2, b2, topB);
+                    AddUv12(s, FaceKinds.Wall, label, slice, across, la, a2, b2, topA);
+                }
+                // A side that has shrunk to nothing at one end is one triangle (under MinWall: nothing, no sliver).
+                var degenerateB = !(hiB - loB > MinWall);
+                var degenerateA = !(hiA - loA > MinWall);
+                if (!degenerateB)
+                {
+                    s.Tris.Add(w);
+                    s.Tris.Add(w + 1);
+                    s.Tris.Add(w + 2);
+                }
+                if (!degenerateA)
+                {
+                    s.Tris.Add(w);
+                    s.Tris.Add(w + 2);
+                    s.Tris.Add(w + 3);
+                }
+            }
+
+            private void AddUv12(Part.Section s, FaceKinds face, int label, TerraceSlice slice, int across, Vector3 v,
+                Vector2 from, Vector2 to, float sliceTop)
+            {
+                s.Uv1.Add(v + _o.Uv1Offset);
+                s.Uv2.Add(_o.Uv2?.Invoke(new VertexContext
+                {
+                    Face = face, Label = label, Slice = slice, Across = across, Position = v, SliceTop = sliceTop,
+                    EdgeFrom = from, EdgeTo = to,
+                }) ?? Vector4.zero);
+            }
         }
     }
 }

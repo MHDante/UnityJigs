@@ -77,7 +77,7 @@ namespace UnityJigs.Tests
                 new[] { new TerraceSlice(-1f, 1f, 0) },
             };
             var graph = TerraceGraph.Trace(labels, w, h, 0.25f, Vector2.zero);
-            var r = TerraceMesher.Build(graph, 0.3f, columns, 1, out var parts);
+            var r = TerraceMesher.Build(graph, columns, 1, out var parts, new TerraceMesher.Options { Roughness = 0.3f });
             Assert.IsTrue(r.Success);
             var shared = graph.Chains.FindAll(c => c.Left != 0 && c.Right != 0);
             Assert.AreEqual(1, shared.Count, "one border between the two terraces");
@@ -129,7 +129,7 @@ namespace UnityJigs.Tests
                 var columns = new TerraceSlice[]?[5];
                 for (var l = 1; l < 5; l++) columns[l] = new[] { new TerraceSlice(-2f, l * 0.125f, 0) };
                 var graph = TerraceGraph.Trace(labels, w, h, 0.25f, new Vector2(1.5f, -2f));
-                var r = TerraceMesher.Build(graph, 0.3f, columns, 1, out _);
+                var r = TerraceMesher.Build(graph, columns, 1, out _, new TerraceMesher.Options { Roughness = 0.3f });
                 Assert.IsTrue(r.Success, $"seed {seed}");
                 var outline = 0.0;
                 foreach (var c in graph.Chains)
@@ -189,6 +189,127 @@ namespace UnityJigs.Tests
                 if (Mathf.Abs(v.x - cut) < 1e-4f) onLine++;
             }
             Assert.Greater(onLine, 0, "the cut line is in the mesh");
+        }
+
+        // A slab floating beside a lower one (the ice pit case): the floating side builds a skirt down to the lower top,
+        // so no gap opens under it; with nothing across (the void) no skirt.
+        [Test]
+        public void SkirtsCloseTheGapDownToALowerNeighbour()
+        {
+            const int w = 20, h = 10;
+            var labels = new int[w * h];
+            for (var y = 0; y < h; y++)
+            for (var x = 2; x < 18; x++)
+                labels[y * w + x] = x < 10 ? 1 : 2;
+            var columns = new TerraceSlice[]?[]
+            {
+                null,
+                new[]
+                {
+                    new TerraceSlice(-0.1f, 0f, 0), // a slab over water at 0
+                    new TerraceSlice(0f, -0.1f, 1, TerraceFaces.Walls, flags: TerraceSliceFlags.Skirt),
+                },
+                new[] { new TerraceSlice(-1.1f, -1f, 0) }, // the pit's slab at −1
+            };
+            var r = TerraceMesher.Build(labels, w, h, 0.25f, Vector2.zero, 0.3f, columns, 2, out var parts);
+            Assert.IsTrue(r.Success);
+            var skirt = parts[1];
+            Assert.IsFalse(skirt.IsEmpty, "a skirt along the pit");
+            var minY = float.MaxValue;
+            var maxY = float.MinValue;
+            foreach (var v in skirt.Vertices)
+            {
+                minY = Mathf.Min(minY, v.y);
+                maxY = Mathf.Max(maxY, v.y);
+                Assert.AreEqual(2.5f, v.x, 1e-4f, "only along the border with the pit (x = 10 cells), never the void");
+            }
+            Assert.AreEqual(-1f, minY, 1e-5f, "down to the pit's top");
+            Assert.AreEqual(-0.1f, maxY, 1e-5f, "up to the slab's bottom");
+        }
+
+        // A lifted (chamfered) band: its top meets the lower terrace on the shared border, the riser there is gone, and
+        // the walls taper where the band ends.
+        [Test]
+        public void LiftedBandMeetsTheLowerTerraceWithNoRiser()
+        {
+            const int w = 24, h = 16;
+            var labels = new int[w * h];
+            for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+                labels[y * w + x] = x < 8 ? 1 : x < 12 && y >= 4 && y < 12 ? 3 : 2; // 1 low, 2 high, 3 = the band in 2
+            var columns = new TerraceSlice[]?[]
+            {
+                null,
+                new[] { new TerraceSlice(-1f, 0f, 0, flags: TerraceSliceFlags.LiftTop) },
+                new[] { new TerraceSlice(-1f, 0.125f, 0, flags: TerraceSliceFlags.LiftTop) },
+                new[] { new TerraceSlice(-1f, 0.125f, 0, flags: TerraceSliceFlags.LiftTop) },
+            };
+            // The band (label 3) ramps from 0 at x = 2 m (the step) up to 0.125 at x = 3 m.
+            float Lift(int label, Vector2 p) => label == 3 ? -0.125f * (1f - Mathf.Clamp01(p.x - 2f)) : 0f;
+            var r = TerraceMesher.Build(TerraceGraph.Trace(labels, w, h, 0.25f, Vector2.zero), columns, 1, out var parts,
+                new TerraceMesher.Options { Roughness = 0.3f, Lift = Lift });
+            Assert.IsTrue(r.Success);
+            var p0 = parts[0];
+            // Every vertex on the step line inside the band (x = 2, 1 < z < 3) is at the low top: no riser there.
+            for (var i = 0; i < p0.Vertices.Count; i++)
+            {
+                var v = p0.Vertices[i];
+                if (Mathf.Abs(v.x - 2f) > 1e-4f || v.z <= 1f + 1e-4f || v.z >= 3f - 1e-4f) continue;
+                if (v.y > -0.5f) Assert.AreEqual(0f, v.y, 1e-5f, $"band edge vertex {v}");
+            }
+            // The band's top is sloped: its normals lean toward −x.
+            var leaning = 0;
+            for (var i = 0; i < p0.Normals.Count; i++)
+                if (p0.Normals[i].y > 0.5f && p0.Normals[i].x < -0.05f) leaning++;
+            Assert.Greater(leaning, 0, "a visible bevel");
+        }
+
+        [Test]
+        public void LongEdgesAreSplitWhereAsked()
+        {
+            const int w = 200, h = 8;
+            var labels = new int[w * h];
+            for (var i = 0; i < labels.Length; i++) labels[i] = 1;
+            var columns = new TerraceSlice[]?[] { null, new[] { new TerraceSlice(-3f, 0f, 0) } };
+            var r = TerraceMesher.Build(TerraceGraph.Trace(labels, w, h, 0.25f, Vector2.zero), columns, 1, out var parts,
+                new TerraceMesher.Options { Roughness = 0.3f, MaxEdge = (_, _) => 10f });
+            Assert.IsTrue(r.Success);
+            var verts = parts[0].Vertices;
+            for (var t = 0; t < parts[0].Triangles.Count; t += 3)
+            {
+                var a = verts[parts[0].Triangles[t]];
+                var b = verts[parts[0].Triangles[t + 1]];
+                var c = verts[parts[0].Triangles[t + 2]];
+                if (Mathf.Abs(a.y - b.y) < 1e-6f && Mathf.Abs(a.y - c.y) < 1e-6f) continue; // tops and bottoms
+                Assert.LessOrEqual(Mathf.Max((a - b).magnitude, (b - c).magnitude, (c - a).magnitude), Mathf.Sqrt(100f + 9f) + 1e-3f);
+            }
+        }
+
+        [Test]
+        public void PartsBecomeSubmeshes()
+        {
+            const int w = 12, h = 12;
+            var labels = new int[w * h];
+            for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+                labels[y * w + x] = x < 6 ? 1 : 2;
+            var columns = new TerraceSlice[]?[]
+                { null, new[] { new TerraceSlice(-1f, 0f, 0) }, new[] { new TerraceSlice(-1f, 0.5f, 1) } };
+            var r = TerraceMesher.Build(TerraceGraph.Trace(labels, w, h, 0.25f, Vector2.zero), columns, 2, out var parts,
+                new TerraceMesher.Options
+                {
+                    Roughness = 0.3f, PartHasUv12 = _ => true, Uv1Offset = new Vector3(100, 0, 0),
+                    Uv2 = c => new Vector4((int)c.Face, c.Label, c.Across, 0),
+                });
+            Assert.IsTrue(r.Success);
+            var mesh = new Mesh();
+            TerraceMesher.WriteSubmeshes(mesh, parts);
+            Assert.AreEqual(2, mesh.subMeshCount);
+            Assert.AreEqual(parts[0].Vertices.Count + parts[1].Vertices.Count, mesh.vertexCount);
+            var uv1 = new List<Vector4>();
+            mesh.GetUVs(1, uv1);
+            Assert.AreEqual(mesh.vertices[0].x + 100f, uv1[0].x, 1e-4f);
+            Object.DestroyImmediate(mesh);
         }
     }
 }
