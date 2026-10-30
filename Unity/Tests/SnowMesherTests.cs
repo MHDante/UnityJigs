@@ -580,5 +580,34 @@ namespace UnityJigs.Tests
                 Assert.AreEqual(want, d[z * w + x], 1e-4f);
             }
         }
+
+        // A new deep tier painted at one end of a long drift: the far tile's key stays, and its mesh would be the same.
+        [Test]
+        public void ANewTierFarAwayKeepsATilesKey()
+        {
+            (float, byte, float) Band(Vector2 p) => (p.x > 2f && p.x < 98f && p.y > 2f && p.y < 23f ? 0.3f : 0f, (byte)0, 0f);
+            var before = Grid(400, 100, Band);
+            var after = Grid(400, 100, p => p.x > 6f && p.x < 10f && p.y > 6f && p.y < 10f ? (2f, (byte)0, 0f) : Band(p));
+            var settings = new SnowMesher.Settings();
+            var a = new SnowMesher();
+            a.Prepare(before, Profiles, settings);
+            var b = new SnowMesher();
+            b.Prepare(after, Profiles, settings);
+            Assert.That(b.TileKey(0, 0), Is.Not.EqualTo(a.TileKey(0, 0)), "the tile it was painted in");
+            var far = a.TilesX - 1;
+            Assert.That(b.TileKey(far, 0), Is.EqualTo(a.TileKey(far, 0)), "the far tile");
+            a.BuildTile(far, 0);
+            b.BuildTile(far, 0);
+            Assert.That(b.Vertices, Is.EqualTo(a.Vertices));
+            Assert.That(b.Normals, Is.EqualTo(a.Normals));
+            Assert.That(b.Triangles, Is.EqualTo(a.Triangles));
+            // Another mesher sharing what Prepare made: the same mesh.
+            var shared = new SnowMesher();
+            shared.ShareFrom(b);
+            shared.BuildTile(0, 0);
+            b.BuildTile(0, 0);
+            Assert.That(shared.Vertices, Is.EqualTo(b.Vertices));
+            Assert.That(shared.Triangles, Is.EqualTo(b.Triangles));
+        }
     }
 }

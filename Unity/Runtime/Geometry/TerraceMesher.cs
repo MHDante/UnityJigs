@@ -132,6 +132,9 @@ namespace UnityJigs.Geometry
             public Func<int, bool>? PartHasUv12;
             public Vector3 Uv1Offset;
             public Func<VertexContext, Vector4>? Uv2;
+
+            /// <summary>Stops a build running off the main thread (between roughness tries and between regions).</summary>
+            public System.Threading.CancellationToken Cancel;
         }
 
         public struct Result
@@ -299,6 +302,7 @@ namespace UnityJigs.Geometry
             List<Region>? regions;
             while (true)
             {
+                options.Cancel.ThrowIfCancellationRequested();
                 if (TryBuild(graph, eps, minArea, options, out regions, ref result)) break;
                 if (eps <= 0f)
                 {
@@ -448,6 +452,7 @@ namespace UnityJigs.Geometry
             {
                 foreach (var region in regions)
                 {
+                    _o.Cancel.ThrowIfCancellationRequested();
                     var column = ColumnOf(region.Label);
                     if (_o.Lift != null && _o.RefineLifted > 0f)
                         foreach (var slice in column)

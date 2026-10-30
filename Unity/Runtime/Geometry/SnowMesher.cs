@@ -313,6 +313,25 @@ namespace UnityJigs.Geometry
             PrepareMs = sw.Elapsed.TotalMilliseconds;
         }
 
+        /// <summary>Makes this mesher another reader of `prepared`'s grid, so tiles can be keyed and built on several
+        /// threads: everything <see cref="Prepare"/> made is shared, read only, and each mesher keeps its own working
+        /// buffers. The same mesh from any mesher, in any order.</summary>
+        public void ShareFrom(SnowMesher prepared)
+        {
+            _grid = prepared._grid;
+            _profiles = prepared._profiles;
+            _settings = prepared._settings;
+            _label = prepared._label;
+            _prof = prepared._prof;
+            _margin = prepared._margin;
+            _tile = prepared._tile;
+            _reach = prepared._reach;
+            TilesX = prepared.TilesX;
+            TilesZ = prepared.TilesZ;
+            _regions.Clear();
+            _regions.AddRange(prepared._regions);
+        }
+
         // ---- one tile --------------------------------------------------------------------------------------------------
 
         // The window: the tile's texels plus the margin, [Wx0, Wx0 + Ww) × [Wz0, Wz0 + Wh).
@@ -442,14 +461,17 @@ namespace UnityJigs.Geometry
         private readonly List<(Vector2 Min, Vector2 Max)> _keyCutBounds = new();
         private readonly List<int> _keyRegions = new();
         private int[] _keyLabel = Array.Empty<int>();
+        private float[] _keyMax = Array.Empty<float>();
         private readonly List<int> _keyTouched = new();
 
         /// <summary>
         /// A key of everything <see cref="BuildTile"/> reads for tile (tx, tz) with these `cuts` after the last
         /// <see cref="Prepare"/>: the same key ⇒ the same mesh, bit for bit — so a bake that keeps each tile's last key
-        /// rebuilds only the tiles whose key changed. A tile can change with an edit far from it: a drift's tiers and ring
-        /// count come from the whole drift. 0 = the tile draws nothing. 64-bit FNV-1a over the settings, the profiles, the
-        /// tile's place, the drifts that reach it (shape, deepest depth, tiers, box — in the order it builds them), the
+        /// rebuilds only the tiles whose key changed. Only what the tile really reads: a drift's tiers come from the whole
+        /// drift, but a tier no texel of the window reaches builds nothing, a cap above the window's deepest texel clamps
+        /// nothing, and of the drift's deepest depth only the ring count it gives is read — so a new deep tier painted far
+        /// away leaves this tile's key alone. 0 = the tile draws nothing. 64-bit FNV-1a over the settings, the profiles, the
+        /// tile's place, the drifts that reach it (shape, box, the tiers it reads — in the order it builds them), the
         /// window's texels (depth, ground, which of those drifts) and the cuts that touch it.
         /// </summary>
         public ulong TileKey(int tx, int tz, IReadOnlyList<Vector2[]>? cuts = null)
@@ -458,10 +480,11 @@ namespace UnityJigs.Geometry
             Reaching(tx, tz, wx0, wz0, wx1, wz1, _keyRegions);
             if (_keyRegions.Count == 0) return 0;
             var h = 14695981039346656037UL;
+            const ulong prime = 1099511628211UL;
             void Mix(int v)
             {
                 h ^= (uint)v;
-                h *= 1099511628211UL;
+                h *= prime;
             }
             void MixF(float v) => Mix(BitConverter.SingleToInt32Bits(v));
 
@@ -506,48 +529,77 @@ namespace UnityJigs.Geometry
 
             // The drifts, numbered 1… in build order (labels are compared only for equality and order); any other drift
             // in the window numbered after them as it is met.
-            if (_keyLabel.Length < _regions.Count) _keyLabel = new int[_regions.Count];
+            if (_keyLabel.Length < _regions.Count)
+            {
+                _keyLabel = new int[_regions.Count];
+                _keyMax = new float[_regions.Count];
+            }
             _keyTouched.Clear();
             var next = 1;
             foreach (var l in _keyRegions)
             {
-                var r = _regions[l];
                 _keyLabel[l] = next++;
                 _keyTouched.Add(l);
-                Mix(r.Profile);
-                MixF(r.MaxDepth);
-                Mix(Mathf.Max(0, r.X0 - wx0) - 1);
-                Mix(Mathf.Max(0, r.Z0 - wz0) - 1);
-                Mix(Mathf.Min(wx1 - wx0 - 1, r.X1 - wx0) + 1);
-                Mix(Mathf.Min(wz1 - wz0 - 1, r.Z1 - wz0) + 1);
-                Mix(r.Layers.Count);
-                foreach (var (threshold, cap) in r.Layers)
-                {
-                    MixF(threshold);
-                    MixF(cap);
-                }
             }
             Mix(wx0);
             Mix(wz0);
             Mix(wx1);
             Mix(wz1);
+            // The window's texels (the bulk of the key's cost: FNV written out, no call per texel).
             var depth = g.Depth;
             var ground = g.Ground;
+            var label = _label;
+            var keyLabel = _keyLabel;
+            var keyMax = _keyMax;
+            var width = g.Width;
+            var hash = h;
             for (var z = wz0; z < wz1; z++)
-            for (var x = wx0; x < wx1; x++)
             {
-                var i = z * g.Width + x;
-                var l = _label[i];
-                if (l != 0 && _keyLabel[l] == 0)
+                var row = z * width;
+                for (var i = row + wx0; i < row + wx1; i++)
                 {
-                    _keyLabel[l] = next++;
-                    _keyTouched.Add(l);
+                    var l = label[i];
+                    var numbered = 0;
+                    if (l != 0)
+                    {
+                        numbered = keyLabel[l];
+                        if (numbered == 0)
+                        {
+                            numbered = keyLabel[l] = next++;
+                            _keyTouched.Add(l);
+                        }
+                        if (depth[i] > keyMax[l]) keyMax[l] = depth[i];
+                    }
+                    hash = (hash ^ (uint)numbered) * prime;
+                    hash = (hash ^ (uint)BitConverter.SingleToInt32Bits(depth[i])) * prime;
+                    hash = (hash ^ (uint)BitConverter.SingleToInt32Bits(ground[i])) * prime;
                 }
-                Mix(l == 0 ? 0 : _keyLabel[l]);
-                MixF(depth[i]);
-                MixF(ground[i]);
             }
-            foreach (var l in _keyTouched) _keyLabel[l] = 0;
+            h = hash;
+            foreach (var l in _keyRegions)
+            {
+                var r = _regions[l];
+                var deepest = _keyMax[l];
+                Mix(r.Profile);
+                Mix(Mathf.Max(0, r.X0 - wx0) - 1);
+                Mix(Mathf.Max(0, r.Z0 - wz0) - 1);
+                Mix(Mathf.Min(wx1 - wx0 - 1, r.X1 - wx0) + 1);
+                Mix(Mathf.Min(wz1 - wz0 - 1, r.Z1 - wz0) + 1);
+                foreach (var (threshold, cap) in r.Layers)
+                {
+                    if (threshold > deepest) continue; // no texel here reaches it: BuildLayer traces nothing
+                    MixF(threshold);
+                    MixF(cap >= deepest ? float.PositiveInfinity : cap);
+                    _profiles[r.Profile].RingsFor(Mathf.Min(r.MaxDepth, cap), out var wallRings, out var shoulderRings);
+                    Mix(wallRings);
+                    Mix(shoulderRings);
+                }
+            }
+            foreach (var l in _keyTouched)
+            {
+                _keyLabel[l] = 0;
+                _keyMax[l] = 0f;
+            }
 
             TileRect(tx, tz, _keyRect);
             TileCuts(cuts, _keyRect, _keyCuts, _keyCutBounds);
@@ -1468,17 +1520,20 @@ namespace UnityJigs.Geometry
             float fx = gx - x0, fz = gz - z0; // from global texel coordinates: every window gets the same bits
             x0 -= _wx0;
             z0 -= _wz0;
-            float sum = 0f, wsum = 0f;
+            float sum = 0f, wsum = 0f, top = float.MinValue;
             for (var k = 0; k < 4; k++)
             {
                 int x = x0 + (k & 1), z = z0 + (k >> 1);
                 if (x < 0 || z < 0 || x >= _ww || z >= _wh) continue;
                 if (_label[Gi(x, z)] != _layerLabel) continue;
                 var w = ((k & 1) == 1 ? fx : 1f - fx) * ((k >> 1) == 1 ? fz : 1f - fz);
-                sum += w * field[z * _ww + x];
+                var v = field[z * _ww + x];
+                sum += w * v;
                 wsum += w;
+                if (v > top) top = v;
             }
-            if (wsum > 1e-6f) return sum / wsum;
+            // Never above its samples (the mean's rounding would read as past a tier's cap, and TileKey relies on it).
+            if (wsum > 1e-6f) return Mathf.Min(sum / wsum, top);
             return field[fallback];
         }
 
