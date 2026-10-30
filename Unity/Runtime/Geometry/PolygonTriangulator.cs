@@ -35,8 +35,40 @@ namespace UnityJigs.Geometry
         public static bool Triangulate(IReadOnlyList<Vector2> outer, IReadOnlyList<IReadOnlyList<Vector2>> holes,
             List<Vector2> vertices, List<int> triangles)
         {
-            if (outer.Count < 3) return false;
             var points = new List<Vector2>(outer.Count);
+            var kept = new List<int>(outer.Count * 3);
+            if (!Triangulate(outer, holes, points, kept, out var used)) return false;
+            var remap = new int[points.Count];
+            for (var i = 0; i < points.Count; i++)
+            {
+                if (!used[i]) continue;
+                remap[i] = vertices.Count;
+                vertices.Add(points[i]);
+            }
+            foreach (var i in kept) triangles.Add(remap[i]);
+            return true;
+        }
+
+        /// <summary>
+        /// The same triangulation, as indices into the INPUT points: the outer's first, then each hole's (holes with fewer
+        /// than 3 points are skipped and take no indices) — so a caller keeps its own per-point data. Triangles are
+        /// counter-clockwise, zero-area ones dropped. False (and nothing appended) when it failed.
+        /// </summary>
+        public static bool TriangulateIndices(IReadOnlyList<Vector2> outer, IReadOnlyList<IReadOnlyList<Vector2>> holes,
+            List<int> triangles)
+        {
+            var points = new List<Vector2>(outer.Count);
+            var kept = new List<int>(outer.Count * 3);
+            if (!Triangulate(outer, holes, points, kept, out _)) return false;
+            triangles.AddRange(kept);
+            return true;
+        }
+
+        private static bool Triangulate(IReadOnlyList<Vector2> outer, IReadOnlyList<IReadOnlyList<Vector2>> holes,
+            List<Vector2> points, List<int> kept, out bool[] used)
+        {
+            used = Array.Empty<bool>();
+            if (outer.Count < 3) return false;
             for (var i = 0; i < outer.Count; i++) points.Add(outer[i]);
             var holeStarts = new List<int>(holes.Count);
             var want = Math.Abs(Area2(points, 0, points.Count));
@@ -55,8 +87,8 @@ namespace UnityJigs.Geometry
             // Counter-clockwise, zero-area dropped; earcut leaves out what it can't triangulate, so the covered area is
             // the success test.
             var got = 0.0;
-            var used = new bool[points.Count];
-            var kept = new List<int>(tris.Count);
+            used = new bool[points.Count];
+            var start0 = kept.Count;
             for (var t = 0; t < tris.Count; t += 3)
             {
                 int a = tris[t], b = tris[t + 1], c = tris[t + 2];
@@ -69,17 +101,9 @@ namespace UnityJigs.Geometry
                 kept.Add(c);
                 used[a] = used[b] = used[c] = true;
             }
-            if (Math.Abs(got - want) > 1e-6 * want + 1e-9) return false;
-
-            var remap = new int[points.Count];
-            for (var i = 0; i < points.Count; i++)
-            {
-                if (!used[i]) continue;
-                remap[i] = vertices.Count;
-                vertices.Add(points[i]);
-            }
-            foreach (var i in kept) triangles.Add(remap[i]);
-            return true;
+            if (Math.Abs(got - want) <= 1e-6 * want + 1e-9) return true;
+            kept.RemoveRange(start0, kept.Count - start0);
+            return false;
         }
 
         public static float SignedArea(IReadOnlyList<Vector2> poly)
