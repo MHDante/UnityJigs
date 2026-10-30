@@ -10,6 +10,10 @@
 # pull. Packages inside the repo are allowed — embedded ("file:Reflections") or elsewhere in it
 # ("file:../../AtProtoUnity" from a project in a subfolder). No-op in non-Unity repos.
 #
+# Then, in a repo that asks for it, a report gate: a committed file `.commit-gate` in the repo root names a
+# report some tool keeps up to date, and this hook only reads it (see gate() below). No such file, or
+# enforce=off: no-op. It judges the staged files only.
+#
 # Bypass intentionally with:  git commit --no-verify
 
 # A closed stderr (e.g. `git commit 2>&1 | head -1`) must not kill this hook mid-message: on Git for Windows
@@ -50,6 +54,69 @@ if [ "$status" -ne 0 ]; then
     echo "Commit blocked. Switch the package back to its remote ref (PackageSwitcher: Switch To Remote) first" >&2
     echo "(or, intentionally, bypass with: git commit --no-verify)." >&2
     exit 1
+fi
+
+# The report gate. `.commit-gate` holds:
+#   report=<report path, from the repo root>
+#   enforce=on | off
+#   files=<glob patterns, space separated: which staged files the report judges>
+#   fix=<what to do about failures, in words: "open Tools > Lint in the editor">
+# The report is one line per file checked, tab separated: <git blob id> <failures> <path from the repo root>.
+# A file's id proves the report is about what is staged, so a stale all-clear can't pass.
+gate_value() {
+    sed -n "s/^$1=//p" "$gate_file" | tr -d '' | head -n 1
+}
+
+gate_judges() {
+    set -f
+    for pattern in $gate_patterns; do
+        case "$1" in $pattern) set +f; return 0 ;; esac
+    done
+    set +f
+    return 1
+}
+
+gate() {
+    report="$root/$(gate_value report)"
+    gate_patterns=$(gate_value files)
+    failures=0
+    stale=""
+    unstaged=""
+    staged=$(git -c core.quotepath=off diff --cached --name-only --diff-filter=ACMRT)
+    while IFS= read -r f; do
+        [ -n "$f" ] && gate_judges "$f" || continue
+        id=$(git --literal-pathspecs ls-files -s -- "$f" | cut -d' ' -f2)
+        line=""
+        [ -f "$report" ] && line=$(P="$f" awk -F'	' '$3 == ENVIRON["P"] { print $1 " " $2; exit }' "$report")
+        if [ "${line%% *}" = "$id" ]; then
+            failures=$((failures + ${line##* }))
+        elif git --literal-pathspecs diff --quiet -- "$f"; then
+            stale="$stale
+  $f"
+        else
+            unstaged="$unstaged
+  $f"
+        fi
+    done <<EOF
+$staged
+EOF
+
+    [ "$failures" -eq 0 ] && [ -z "$stale" ] && [ -z "$unstaged" ] && return 0
+    echo "" >&2
+    [ "$failures" -gt 0 ] && echo "$failures stray changes: $(gate_value fix)." >&2
+    [ -n "$stale" ] && printf 'Open Unity to validate (open any scene listed here in Unity):%s
+' "$stale" >&2
+    [ -n "$unstaged" ] && printf 'These changed after you staged them. Stage them again:%s
+' "$unstaged" >&2
+    echo "Commit blocked (or, intentionally, bypass with: git commit --no-verify)." >&2
+    echo "" >&2
+    return 1
+}
+
+root=$(git rev-parse --show-toplevel)
+gate_file="$root/.commit-gate"
+if [ -f "$gate_file" ] && [ "$(gate_value enforce)" = "on" ] && ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    gate || exit 1
 fi
 
 exit 0

@@ -303,6 +303,12 @@ Nothing here is imposed on a repo: read it, then adapt. A typical setup:
      absolute (`file:D:/Clones/SomePackage`) or climbing out (`file:../../../SomePackage`, what PackageSwitcher's
      Switch To Local writes): a teammate without that clone breaks on pull. Packages inside the repo pass
      (`file:Reflections`, or `file:../../Pkg` from a project in a subfolder).
+     It also holds an optional **report gate**, a no-op unless the repo commits a `.commit-gate` file in its
+     root with `enforce=on`: the file names a report a tool keeps up to date (`report=`, one line per checked
+     file: git blob id, failures, path, tab separated), which staged files it judges (`files=*.prefab *.unity`)
+     and what to tell the user about failures (`fix=`). A staged file with failures, or one the report hasn't
+     seen in that exact version, blocks the commit; the hook parses nothing but the report. Merge commits are
+     not checked.
    - `post-checkout` / `post-commit` / `post-merge` — Git LFS's own stubs, so the set is complete for an LFS
      repo (the same files `git lfs install --local` writes).
    Bypass on purpose with `--no-verify`. These are guards against accidents, not against agents: whether an
