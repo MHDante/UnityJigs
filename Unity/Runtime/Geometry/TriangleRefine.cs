@@ -18,7 +18,7 @@ namespace UnityJigs.Geometry
             if (maxEdge <= 0f) return 0;
             var max2 = maxEdge * maxEdge;
             // Edge → the triangles using it (at most two).
-            var edges = new Dictionary<long, (int a, int b)>();
+            var edges = new Dictionary<long, (int a, int b)>(EdgeKeys.Comparer);
             long Key(int u, int v) => u < v ? (long)u << 32 | (uint)v : (long)v << 32 | (uint)u;
             void Link(int t)
             {

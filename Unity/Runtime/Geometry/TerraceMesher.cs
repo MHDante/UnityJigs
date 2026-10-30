@@ -121,7 +121,11 @@ namespace UnityJigs.Geometry
             public Func<int, Vector2, float>? Lift;
 
             /// <summary>A lifting label's top is refined (TriangleRefine) to edges no longer than this, metres (0 = not):
-            /// the slope is then sampled at well-shaped triangles. Its outline should already be split as finely.</summary>
+            /// the slope is then sampled at well-shaped triangles. Its outline should already be split as finely. The top's
+            /// T-junctions (points earcut left off an edge) are split first and it is made constrained Delaunay
+            /// (DelaunayMesh: earcut's fans of needles — a long one-cell strip's are 50 m long — would refine into hundreds of
+            /// thousands of slivers); the refinement stops at a vertex budget scaled to the region's area
+            /// (<see cref="Result.RefinesCapped"/> counts the regions that reached it).</summary>
             public float RefineLifted;
 
             /// <summary>Parts that carry uv1 (position + Uv1Offset) and uv2 (this callback): the rest carry neither.</summary>
@@ -144,6 +148,9 @@ namespace UnityJigs.Geometry
             public float TopArea;
             /// <summary>Chains in the traced graph (after the edit) and the junction-bounded ones among them.</summary>
             public int Chains, OpenChains;
+            /// <summary>Lifted regions whose refinement stopped at its vertex budget (never expected; such a top is
+            /// coarser than RefineLifted asks).</summary>
+            public int RefinesCapped;
         }
 
         /// <summary>One output part's faces (a mesh, or a submesh of one).</summary>
@@ -301,7 +308,9 @@ namespace UnityJigs.Geometry
                 eps = eps < cellSize * 0.05f ? 0f : eps * 0.5f;
             }
             result.Roughness = eps;
-            new Writer(columns, parts, options).Write(regions!);
+            var writer = new Writer(columns, parts, options);
+            writer.Write(regions!);
+            result.RefinesCapped = writer.RefinesCapped;
             foreach (var p in parts)
             {
                 p.Finish();
@@ -413,6 +422,8 @@ namespace UnityJigs.Geometry
             private readonly Part[] _parts;
             private readonly Options _o;
             private readonly List<(float lo, float hi)> _a = new(), _b = new();
+            private DelaunayMesh? _delaunay;
+            public int RefinesCapped;
 
             public Writer(IReadOnlyList<TerraceSlice[]?> columns, Part[] parts, Options options)
             {
@@ -442,7 +453,7 @@ namespace UnityJigs.Geometry
                         foreach (var slice in column)
                             if ((slice.Flags & (TerraceSliceFlags.LiftTop | TerraceSliceFlags.LiftBottom)) != 0)
                             {
-                                TriangleRefine.Refine(region.Vertices, region.Triangles, _o.RefineLifted);
+                                Refine(region);
                                 break;
                             }
                     foreach (var slice in column)
@@ -494,6 +505,125 @@ namespace UnityJigs.Geometry
                             }
                         }
                     }
+                }
+            }
+
+            // A lifted region's top: its T-junctions repaired (RepairTJunctions), flipped to the constrained Delaunay
+            // triangulation (same points, same outline), then refined, at most to a vertex budget of 8 per maxEdge² of area
+            // (well-shaped triangles with edges up to maxEdge need about 1.2) beyond the points it has — so even a bad input
+            // ends in milliseconds.
+            private void Refine(Region region)
+            {
+                RepairTJunctions(region, _o.RefineLifted);
+                var d = _delaunay ??= new DelaunayMesh();
+                d.Reset(region.Vertices, region.Triangles);
+                d.MakeDelaunay();
+                region.Triangles.Clear();
+                region.Triangles.AddRange(d.Triangles);
+                var v = region.Vertices;
+                var t = region.Triangles;
+                var area = 0f;
+                for (var i = 0; i < t.Count; i += 3)
+                {
+                    Vector2 a = v[t[i]], b = v[t[i + 1]], c = v[t[i + 2]];
+                    area += Mathf.Abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) * 0.5f;
+                }
+                var max = _o.RefineLifted;
+                var budget = v.Count + 16 + Mathf.CeilToInt(Mathf.Min(8f * area / (max * max), 1e6f));
+                TriangleRefine.Refine(v, t, max, budget);
+                if (v.Count >= budget) RefinesCapped++;
+            }
+
+            // Earcut drops zero-area ears, so points can be missing from an edge: a run of collinear outline points (a
+            // straight line split every cell) spanned by one outline edge, or an edge across the region running straight
+            // through a vertex of another loop (a T-junction inside). A flat top doesn't mind; a lifted one must sample the
+            // lift at every point and meet its neighbours' triangles there (no crack), and the refinement treats such an
+            // edge as outline and stalls on it. Every edge used by one triangle that has points of the region's loops on
+            // it is split there: that triangle becomes a fan from its third corner.
+            private static void RepairTJunctions(Region region, float cell)
+            {
+                var v = region.Vertices;
+                var t = region.Triangles;
+                var index = new Dictionary<Vector2, int>();
+                for (var i = 0; i < v.Count; i++) index.TryAdd(v[i], i);
+                // The loops' points, hashed by cell.
+                var grid = new Dictionary<long, List<Vector2>>(EdgeKeys.Comparer);
+                long CellKey(int x, int y) => (long)x << 32 | (uint)y;
+                foreach (var loop in region.Loops)
+                foreach (var p in loop.Points)
+                {
+                    var k = CellKey(Mathf.FloorToInt(p.x / cell), Mathf.FloorToInt(p.y / cell));
+                    if (!grid.TryGetValue(k, out var list)) grid[k] = list = new List<Vector2>();
+                    list.Add(p);
+                }
+                var uses = new Dictionary<long, int>(EdgeKeys.Comparer); // undirected edge → triangles using it
+                long Key(int a, int b) => a < b ? (long)a << 32 | (uint)b : (long)b << 32 | (uint)a;
+                void Use(int a, int b, int n) => uses[Key(a, b)] = (uses.TryGetValue(Key(a, b), out var u) ? u : 0) + n;
+                for (var i = 0; i < t.Count; i += 3)
+                for (var k = 0; k < 3; k++)
+                    Use(t[i + k], t[i + (k + 1) % 3], 1);
+                var on = new List<(float s, Vector2 p)>();
+                for (var tri = 0; tri < t.Count / 3; tri++)
+                for (var k = 0; k < 3; k++)
+                {
+                    int a = t[tri * 3 + k], b = t[tri * 3 + (k + 1) % 3], c = t[tri * 3 + (k + 2) % 3];
+                    if (uses[Key(a, b)] != 1) continue;
+                    Vector2 pa = v[a], pb = v[b];
+                    var d = pb - pa;
+                    var len2 = d.sqrMagnitude;
+                    on.Clear();
+                    int x0 = Mathf.FloorToInt(Mathf.Min(pa.x, pb.x) / cell), x1 = Mathf.FloorToInt(Mathf.Max(pa.x, pb.x) / cell);
+                    int y0 = Mathf.FloorToInt(Mathf.Min(pa.y, pb.y) / cell), y1 = Mathf.FloorToInt(Mathf.Max(pa.y, pb.y) / cell);
+                    for (var y = y0; y <= y1; y++)
+                    for (var x = x0; x <= x1; x++)
+                    {
+                        if (!grid.TryGetValue(CellKey(x, y), out var list)) continue;
+                        foreach (var p in list)
+                        {
+                            if (p == pa || p == pb) continue;
+                            var q = p - pa;
+                            var along = Vector2.Dot(q, d);
+                            if (along <= 0f || along >= len2) continue;
+                            if (Mathf.Abs(q.x * d.y - q.y * d.x) > 1e-6f * Mathf.Sqrt(len2)) continue; // off the line (> 1 µm)
+                            on.Add((along, p));
+                        }
+                    }
+                    if (on.Count == 0) continue;
+                    on.Sort((m, n) => m.s.CompareTo(n.s));
+                    // (a, b, c) → (a, p1, c), (p1, p2, c) … (pn, b, c): the same winding.
+                    Use(a, b, -1);
+                    var prev = a;
+                    for (var r = 0; r <= on.Count; r++)
+                    {
+                        int next;
+                        if (r < on.Count)
+                        {
+                            var p = on[r].p;
+                            if (!index.TryGetValue(p, out next))
+                            {
+                                next = v.Count;
+                                v.Add(p);
+                                index[p] = next;
+                            }
+                        }
+                        else next = b;
+                        if (r == 0)
+                        {
+                            t[tri * 3] = prev;
+                            t[tri * 3 + 1] = next;
+                            t[tri * 3 + 2] = c;
+                        }
+                        else
+                        {
+                            t.Add(prev);
+                            t.Add(next);
+                            t.Add(c);
+                        }
+                        Use(prev, next, 1);
+                        if (r < on.Count) Use(next, c, 2);
+                        prev = next;
+                    }
+                    k = -1; // this triangle's edges changed: look at them again
                 }
             }
 

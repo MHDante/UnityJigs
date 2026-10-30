@@ -286,6 +286,140 @@ namespace UnityJigs.Tests
         }
 
         [Test]
+        public void ALongOneCellRampRefinesQuickly()
+        {
+            // A one-step border 50 m long whose ramp band is one cell wide (a chamfer along a sheet's edge): earcut cuts
+            // the strip into a fan of 50 m needles, which the refinement once turned into ~200,000 slivers over minutes.
+            const int w = 40, h = 200;
+            var labels = new int[w * h];
+            for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+                labels[y * w + x] = x < 20 ? 1 : x == 20 ? 3 : 2; // 1 low, 3 = the band, 2 high
+            var columns = new TerraceSlice[]?[]
+            {
+                null,
+                new[] { new TerraceSlice(-1f, 0f, 0) },
+                new[] { new TerraceSlice(-1f, 0.125f, 0) },
+                new[] { new TerraceSlice(-1f, 0.125f, 0, flags: TerraceSliceFlags.LiftTop | TerraceSliceFlags.LiftBottom) },
+            };
+            float Lift(int label, Vector2 p) => label == 3 ? -0.125f * (1f - Mathf.Clamp01((p.x - 5f) / 0.25f)) : 0f;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var r = TerraceMesher.Build(TerraceGraph.Trace(labels, w, h, 0.25f, Vector2.zero), columns, 1, out var parts,
+                new TerraceMesher.Options
+                {
+                    Roughness = 0.3f, Lift = Lift, RefineLifted = 0.35f,
+                    MaxEdge = (l, rr) => l == 3 || rr == 3 ? 0.25f : 0f,
+                    RoughnessScale = (l, rr) => l == 3 || rr == 3 ? 0.25f : 1f,
+                });
+            var ms = clock.Elapsed.TotalMilliseconds;
+            Assert.IsTrue(r.Success);
+            Assert.AreEqual(0, r.RefinesCapped, "the refinement reached its budget");
+            Assert.Less(ms, 1000.0, "a 50 m ramp band bakes in well under a second");
+            // The band's top: one centre point per cell at most (Delaunay rungs and diagonals, each diagonal split once),
+            // every triangle well shaped — no edge longer than RefineLifted, none under an eighth of a cell's area.
+            var v = parts[0].Vertices;
+            var t = parts[0].Triangles;
+            var band = 0;
+            for (var i = 0; i < t.Count; i += 3)
+            {
+                Vector3 a = v[t[i]], b = v[t[i + 1]], c = v[t[i + 2]];
+                var cx = (a.x + b.x + c.x) / 3f;
+                var flatY = Mathf.Abs(a.y - b.y) < 0.2f && Mathf.Abs(a.y - c.y) < 0.2f && Mathf.Min(a.y, b.y, c.y) > -0.5f;
+                if (cx < 5f || cx > 5.25f || !flatY) continue; // the band's top only
+                band++;
+                var ab = new Vector2(b.x - a.x, b.z - a.z);
+                var ac = new Vector2(c.x - a.x, c.z - a.z);
+                var longest = Mathf.Max(ab.magnitude, ac.magnitude, new Vector2(c.x - b.x, c.z - b.z).magnitude);
+                Assert.LessOrEqual(longest, 0.35f + 1e-4f, $"band edge {longest}");
+                Assert.Greater(Mathf.Abs(ab.x * ac.y - ab.y * ac.x) * 0.5f, 0.25f * 0.0625f * 0.5f, "a sliver on the band");
+            }
+            Assert.Greater(band, 0);
+            Assert.LessOrEqual(band, 4 * h, "at most four triangles per cell");
+        }
+
+        [Test]
+        public void LiftedTopsHaveNoTJunctions()
+        {
+            // Random terraces with a two-cell band (a ramp) along every border of label 2 with label 1: holes, islands,
+            // saddles. Earcut leaves points off some edges (collinear runs, an edge through another loop's vertex); every
+            // point of a lifted top must be on its triangles' corners, or the slope cracks against its neighbour.
+            for (var seed = 0; seed < 8; seed++)
+            {
+                const int w = 96, h = 80;
+                var a = Blobs(w, h, seed, 14, 12f);
+                var labels = new int[w * h];
+                for (var i = 0; i < labels.Length; i++) labels[i] = a.Bits[i] != 0 ? 2 : 1;
+                var band = (int[])labels.Clone();
+                for (var y = 0; y < h; y++)
+                for (var x = 0; x < w; x++)
+                {
+                    if (labels[y * w + x] != 2) continue;
+                    for (var dy = -2; dy <= 2; dy++)
+                    for (var dx = -2; dx <= 2; dx++)
+                    {
+                        int nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < w && ny < h && labels[ny * w + nx] == 1) band[y * w + x] = 3;
+                    }
+                }
+                var columns = new TerraceSlice[]?[]
+                {
+                    null,
+                    new[] { new TerraceSlice(-0.1f, 0f, 0) },
+                    new[] { new TerraceSlice(-0.1f, 0.125f, 0) },
+                    new[] { new TerraceSlice(-0.1f, 0.125f, 0, flags: TerraceSliceFlags.LiftTop) },
+                };
+                float Lift(int label, Vector2 p) => label == 3 ? -0.06f + 0.01f * Mathf.Sin(p.x * 3f + p.y) : 0f;
+                var r = TerraceMesher.Build(TerraceGraph.Trace(band, w, h, 0.25f, Vector2.zero), columns, 1, out var parts,
+                    new TerraceMesher.Options
+                    {
+                        Roughness = 0.3f, Lift = Lift, RefineLifted = 0.35f,
+                        MaxEdge = (l, rr) => l == 3 || rr == 3 ? 0.25f : 0f,
+                        RoughnessScale = (l, rr) => l == 3 || rr == 3 ? 0.25f : 1f,
+                    });
+                Assert.IsTrue(r.Success, $"seed {seed}");
+                Assert.AreEqual(0, r.RefinesCapped, $"seed {seed}: a refinement reached its budget");
+                // Every lifted top vertex (the band's tops: y below 0.125, above 0) lying inside another lifted top
+                // triangle's edge is a T-junction.
+                var v = parts[0].Vertices;
+                var t = parts[0].Triangles;
+                bool Lifted(Vector3 p) => p.y > 1e-4f && p.y < 0.125f - 1e-4f;
+                var tops = new List<Vector3>();
+                foreach (var p in v)
+                    if (Lifted(p)) tops.Add(p);
+                var grid = new Dictionary<Vector2Int, List<Vector3>>();
+                foreach (var p in tops)
+                {
+                    var k = new Vector2Int(Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.z));
+                    if (!grid.TryGetValue(k, out var list)) grid[k] = list = new List<Vector3>();
+                    list.Add(p);
+                }
+                var junctions = 0;
+                for (var i = 0; i < t.Count; i += 3)
+                for (var k = 0; k < 3; k++)
+                {
+                    Vector3 e0 = v[t[i + k]], e1 = v[t[i + (k + 1) % 3]];
+                    if (!Lifted(e0) && !Lifted(e1)) continue;
+                    var d = new Vector2(e1.x - e0.x, e1.z - e0.z);
+                    for (var gx = Mathf.FloorToInt(Mathf.Min(e0.x, e1.x)); gx <= Mathf.FloorToInt(Mathf.Max(e0.x, e1.x)); gx++)
+                    for (var gz = Mathf.FloorToInt(Mathf.Min(e0.z, e1.z)); gz <= Mathf.FloorToInt(Mathf.Max(e0.z, e1.z)); gz++)
+                    {
+                        if (!grid.TryGetValue(new Vector2Int(gx, gz), out var list)) continue;
+                        foreach (var p in list)
+                        {
+                            var q = new Vector2(p.x - e0.x, p.z - e0.z);
+                            var along = Vector2.Dot(q, d);
+                            if (along <= 1e-8f || along >= d.sqrMagnitude - 1e-8f) continue;
+                            if (Mathf.Abs(q.x * d.y - q.y * d.x) > 1e-6f * d.magnitude) continue;
+                            if (Mathf.Abs(Mathf.Lerp(e0.y, e1.y, along / d.sqrMagnitude) - p.y) > 0.02f) continue; // another layer
+                            junctions++;
+                        }
+                    }
+                }
+                Assert.AreEqual(0, junctions, $"seed {seed}: T-junctions on the lifted tops");
+            }
+        }
+
+        [Test]
         public void PartsBecomeSubmeshes()
         {
             const int w = 12, h = 12;

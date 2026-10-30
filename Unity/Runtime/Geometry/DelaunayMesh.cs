@@ -16,7 +16,7 @@ namespace UnityJigs.Geometry
         public readonly List<Vector2> Points = new();
         public readonly List<int> Triangles = new();
         private readonly List<int> _twin = new(); // per half-edge (triangle · 3 + k, from corner k to k + 1): its twin, or −1
-        private readonly Dictionary<long, int> _build = new();
+        private readonly Dictionary<long, int> _build = new(EdgeKeys.Comparer);
         private readonly Stack<int> _legalize = new();
         private int _last;
 
