@@ -411,6 +411,85 @@ namespace UnityJigs.Tests
             CollectionAssert.AreEqual(t, m.Triangles);
         }
 
+        // A bake that keeps each tile whose key didn't change gives the same meshes, bit for bit, as building every tile
+        // again — after a local edit (most tiles kept) and after an edit that reaches a far tile through its drift.
+        [Test]
+        public void TileKeysFindEveryChangedTile()
+        {
+            void Check(SnowGrid before, SnowGrid after, string what, out int kept, out int rebuilt)
+            {
+                var m = new SnowMesher();
+                m.Prepare(before, Profiles, new SnowMesher.Settings());
+                var keys = new Dictionary<(int, int), ulong>();
+                var meshes = new Dictionary<(int, int), (Vector3[] V, int[] T)>();
+                for (var tz = 0; tz < m.TilesZ; tz++)
+                for (var tx = 0; tx < m.TilesX; tx++)
+                {
+                    keys[(tx, tz)] = m.TileKey(tx, tz);
+                    m.BuildTile(tx, tz);
+                    meshes[(tx, tz)] = (m.Vertices.ToArray(), m.Triangles.ToArray());
+                    if (keys[(tx, tz)] == 0) Assert.AreEqual(0, m.Triangles.Count, $"{what}: tile {tx},{tz} keyed 0 draws");
+                }
+                m.Prepare(after, Profiles, new SnowMesher.Settings());
+                kept = rebuilt = 0;
+                for (var tz = 0; tz < m.TilesZ; tz++)
+                for (var tx = 0; tx < m.TilesX; tx++)
+                {
+                    var key = m.TileKey(tx, tz);
+                    m.BuildTile(tx, tz);
+                    if (key != keys[(tx, tz)])
+                    {
+                        rebuilt++;
+                        continue;
+                    }
+                    kept++;
+                    CollectionAssert.AreEqual(meshes[(tx, tz)].V, m.Vertices, $"{what}: tile {tx},{tz} kept, vertices changed");
+                    CollectionAssert.AreEqual(meshes[(tx, tz)].T, m.Triangles, $"{what}: tile {tx},{tz} kept, triangles changed");
+                }
+            }
+
+            // A dab: one disc deeper in a corner of a random field.
+            for (var seed = 0; seed < 4; seed++)
+            {
+                var a = Blobs(390, 390, seed, 1.6f, true, seed % 2 == 1);
+                var b = Blobs(390, 390, seed, 1.6f, true, seed % 2 == 1);
+                for (var z = 20; z < 40; z++)
+                for (var x = 20; x < 40; x++)
+                {
+                    var i = z * b.Width + x;
+                    b.Paint![i] = 0.4f;
+                    b.Depth[i] = 0.4f;
+                }
+                Check(a, b, $"dab, seed {seed}", out var kept, out var rebuilt);
+                Assert.Greater(kept, 0, $"seed {seed}: a dab kept no tile");
+                Assert.Greater(rebuilt, 0, $"seed {seed}: a dab rebuilt no tile");
+            }
+
+            // A long drift across three tiles; a deeper end in the last one adds wall rings to the whole drift (its ring
+            // count comes from its deepest point), so the first tile's mesh changes too — and its key must.
+            SnowGrid Strip(bool deepEnd)
+            {
+                var g = Grid(300, 60, p =>
+                {
+                    var d = p.x > 2f && p.x < 73f && p.y > 3f && p.y < 12f ? 0.3f : 0f;
+                    if (deepEnd && (p - new Vector2(70f, 7.5f)).magnitude < 2f) d = 0.8f;
+                    return (d, (byte)0, 0f);
+                }, smooth: false);
+                g.Paint = null;
+                return g;
+            }
+            var m0 = new SnowMesher();
+            m0.Prepare(Strip(false), Profiles, new SnowMesher.Settings());
+            var far0 = m0.TileKey(0, 0);
+            m0.BuildTile(0, 0);
+            var v0 = m0.Vertices.ToArray();
+            m0.Prepare(Strip(true), Profiles, new SnowMesher.Settings());
+            Assert.AreNotEqual(far0, m0.TileKey(0, 0), "the far tile's key missed the drift's new depth");
+            m0.BuildTile(0, 0);
+            Assert.AreNotEqual(v0.Length, m0.Vertices.Count, "the far tile's mesh should change (more wall rings)");
+            Check(Strip(false), Strip(true), "deep end", out _, out _);
+        }
+
         [Test]
         public void ADenseTileFitsTheBudget()
         {

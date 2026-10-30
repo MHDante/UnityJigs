@@ -338,56 +338,12 @@ namespace UnityJigs.Geometry
             OutlineStarts.Clear();
             OutlineStarts.Add(0);
             Stats = default;
-            var g = _grid;
-            var c = g.CellSize;
-            int tileX0 = tx * _tile, tileZ0 = tz * _tile;
-            float x0 = TileLine(tx, g.Min.x, TilesX), z0 = TileLine(tz, g.Min.y, TilesZ);
-            float x1 = TileLine(tx + 1, g.Min.x, TilesX), z1 = TileLine(tz + 1, g.Min.y, TilesZ);
-            _rect[0] = new Vector2(x0, z0);
-            _rect[1] = new Vector2(x1, z0);
-            _rect[2] = new Vector2(x1, z1);
-            _rect[3] = new Vector2(x0, z1);
-            _cuts.Clear();
-            _cutBounds.Clear();
-            if (cuts != null)
-                foreach (var cut in cuts)
-                {
-                    if (cut.Length < 3) continue;
-                    var ccw = (Vector2[])cut.Clone();
-                    if (PolygonTriangulator.SignedArea(ccw) < 0) Array.Reverse(ccw);
-                    Vector2 mn = ccw[0], mx = ccw[0];
-                    foreach (var p in ccw)
-                    {
-                        mn = Vector2.Min(mn, p);
-                        mx = Vector2.Max(mx, p);
-                    }
-                    if (mx.x < x0 || mn.x > x1 || mx.y < z0 || mn.y > z1) continue;
-                    _cuts.Add(ccw);
-                    _cutBounds.Add((mn, mx));
-                }
-
-            var margin = Mathf.CeilToInt(_margin / c);
-            _wx0 = Mathf.Max(0, tileX0 - margin);
-            _wz0 = Mathf.Max(0, tileZ0 - margin);
-            var wx1 = Mathf.Min(g.Width, tileX0 + _tile + margin);
-            var wz1 = Mathf.Min(g.Height, tileZ0 + _tile + margin);
+            TileRect(tx, tz, _rect);
+            TileCuts(cuts, _rect, _cuts, _cutBounds);
+            if (!TileWindow(tx, tz, out _wx0, out _wz0, out var wx1, out var wz1)) return;
             _ww = wx1 - _wx0;
             _wh = wz1 - _wz0;
-            if (_ww <= 0 || _wh <= 0) return;
-
-            // The drifts that can reach the tile.
-            _layerRegions.Clear();
-            for (var l = 1; l < _regions.Count; l++)
-            {
-                var r = _regions[l];
-                var p = _profiles[r.Profile];
-                if (!p.Draws) continue;
-                var reach = Mathf.CeilToInt(_reach[r.Profile] / c) + 1;
-                if (r.X1 + reach < tileX0 || r.X0 - reach >= tileX0 + _tile || r.Z1 + reach < tileZ0 ||
-                    r.Z0 - reach >= tileZ0 + _tile) continue;
-                if (r.X1 < _wx0 || r.X0 >= wx1 || r.Z1 < _wz0 || r.Z0 >= wz1) continue;
-                _layerRegions.Add(l);
-            }
+            Reaching(tx, tz, _wx0, _wz0, wx1, wz1, _layerRegions);
             if (_layerRegions.Count == 0)
             {
                 Stats.Ms = sw.Elapsed.TotalMilliseconds;
@@ -410,6 +366,203 @@ namespace UnityJigs.Geometry
         }
 
         private readonly List<int> _layerRegions = new();
+
+        // The tile's square (CCW: −x−z, +x−z, +x+z, −x+z) in grid space.
+        private void TileRect(int tx, int tz, Vector2[] rect)
+        {
+            var g = _grid;
+            float x0 = TileLine(tx, g.Min.x, TilesX), z0 = TileLine(tz, g.Min.y, TilesZ);
+            float x1 = TileLine(tx + 1, g.Min.x, TilesX), z1 = TileLine(tz + 1, g.Min.y, TilesZ);
+            rect[0] = new Vector2(x0, z0);
+            rect[1] = new Vector2(x1, z0);
+            rect[2] = new Vector2(x1, z1);
+            rect[3] = new Vector2(x0, z1);
+        }
+
+        // The cut polygons whose bounds touch the tile's square, made CCW, with their bounds.
+        private static void TileCuts(IReadOnlyList<Vector2[]>? cuts, Vector2[] rect, List<Vector2[]> into,
+            List<(Vector2 Min, Vector2 Max)> bounds)
+        {
+            into.Clear();
+            bounds.Clear();
+            if (cuts == null) return;
+            foreach (var cut in cuts)
+            {
+                if (cut.Length < 3) continue;
+                var ccw = (Vector2[])cut.Clone();
+                if (PolygonTriangulator.SignedArea(ccw) < 0) Array.Reverse(ccw);
+                Vector2 mn = ccw[0], mx = ccw[0];
+                foreach (var p in ccw)
+                {
+                    mn = Vector2.Min(mn, p);
+                    mx = Vector2.Max(mx, p);
+                }
+                if (mx.x < rect[0].x || mn.x > rect[2].x || mx.y < rect[0].y || mn.y > rect[2].y) continue;
+                into.Add(ccw);
+                bounds.Add((mn, mx));
+            }
+        }
+
+        // The texels the tile reads: its own plus the read margin, clamped to the grid, [wx0, wx1) × [wz0, wz1).
+        private bool TileWindow(int tx, int tz, out int wx0, out int wz0, out int wx1, out int wz1)
+        {
+            var g = _grid;
+            var margin = Mathf.CeilToInt(_margin / g.CellSize);
+            int tileX0 = tx * _tile, tileZ0 = tz * _tile;
+            wx0 = Mathf.Max(0, tileX0 - margin);
+            wz0 = Mathf.Max(0, tileZ0 - margin);
+            wx1 = Mathf.Min(g.Width, tileX0 + _tile + margin);
+            wz1 = Mathf.Min(g.Height, tileZ0 + _tile + margin);
+            return wx1 > wx0 && wz1 > wz0;
+        }
+
+        // The drawn drifts that can reach tile (tx, tz) and lie in its window, in label order (the order it builds them).
+        private void Reaching(int tx, int tz, int wx0, int wz0, int wx1, int wz1, List<int> into)
+        {
+            into.Clear();
+            var c = _grid.CellSize;
+            int tileX0 = tx * _tile, tileZ0 = tz * _tile;
+            for (var l = 1; l < _regions.Count; l++)
+            {
+                var r = _regions[l];
+                var p = _profiles[r.Profile];
+                if (!p.Draws) continue;
+                var reach = Mathf.CeilToInt(_reach[r.Profile] / c) + 1;
+                if (r.X1 + reach < tileX0 || r.X0 - reach >= tileX0 + _tile || r.Z1 + reach < tileZ0 ||
+                    r.Z0 - reach >= tileZ0 + _tile) continue;
+                if (r.X1 < wx0 || r.X0 >= wx1 || r.Z1 < wz0 || r.Z0 >= wz1) continue;
+                into.Add(l);
+            }
+        }
+
+        // ---- tile keys ---------------------------------------------------------------------------------------------------
+
+        private readonly Vector2[] _keyRect = new Vector2[4];
+        private readonly List<Vector2[]> _keyCuts = new();
+        private readonly List<(Vector2 Min, Vector2 Max)> _keyCutBounds = new();
+        private readonly List<int> _keyRegions = new();
+        private int[] _keyLabel = Array.Empty<int>();
+        private readonly List<int> _keyTouched = new();
+
+        /// <summary>
+        /// A key of everything <see cref="BuildTile"/> reads for tile (tx, tz) with these `cuts` after the last
+        /// <see cref="Prepare"/>: the same key ⇒ the same mesh, bit for bit — so a bake that keeps each tile's last key
+        /// rebuilds only the tiles whose key changed. A tile can change with an edit far from it: a drift's tiers and ring
+        /// count come from the whole drift. 0 = the tile draws nothing. 64-bit FNV-1a over the settings, the profiles, the
+        /// tile's place, the drifts that reach it (shape, deepest depth, tiers, box — in the order it builds them), the
+        /// window's texels (depth, ground, which of those drifts) and the cuts that touch it.
+        /// </summary>
+        public ulong TileKey(int tx, int tz, IReadOnlyList<Vector2[]>? cuts = null)
+        {
+            if (!TileWindow(tx, tz, out var wx0, out var wz0, out var wx1, out var wz1)) return 0;
+            Reaching(tx, tz, wx0, wz0, wx1, wz1, _keyRegions);
+            if (_keyRegions.Count == 0) return 0;
+            var h = 14695981039346656037UL;
+            void Mix(int v)
+            {
+                h ^= (uint)v;
+                h *= 1099511628211UL;
+            }
+            void MixF(float v) => Mix(BitConverter.SingleToInt32Bits(v));
+
+            var g = _grid;
+            var s = _settings;
+            MixF(s.MinDepth);
+            MixF(s.LevelStep);
+            MixF(s.MinLoopArea);
+            MixF(s.OutlineTolerance);
+            MixF(s.NoiseOffset.x);
+            MixF(s.NoiseOffset.y);
+            MixF(s.NoiseYaw);
+            MixF(g.CellSize);
+            MixF(g.Min.x);
+            MixF(g.Min.y);
+            MixF(_margin);
+            Mix(_tile);
+            Mix(TilesX);
+            Mix(TilesZ);
+            Mix(tx);
+            Mix(tz);
+            foreach (var p in _profiles)
+            {
+                Mix(p.Draws ? 1 : 0);
+                MixF(p.Wall);
+                MixF(p.WallAngle);
+                MixF(p.Bulge);
+                MixF(p.Shoulder);
+                MixF(p.ShoulderMin);
+                MixF(p.ShoulderMax);
+                MixF(p.Puff);
+                MixF(p.PuffReach);
+                MixF(p.Lumps);
+                MixF(p.LumpScale);
+                MixF(p.Spacing);
+                Mix(p.WallRings);
+                Mix(p.ShoulderRings);
+                MixF(p.RingStep);
+                MixF(p.CapEdge);
+                MixF(p.TierStep);
+            }
+
+            // The drifts, numbered 1… in build order (labels are compared only for equality and order); any other drift
+            // in the window numbered after them as it is met.
+            if (_keyLabel.Length < _regions.Count) _keyLabel = new int[_regions.Count];
+            _keyTouched.Clear();
+            var next = 1;
+            foreach (var l in _keyRegions)
+            {
+                var r = _regions[l];
+                _keyLabel[l] = next++;
+                _keyTouched.Add(l);
+                Mix(r.Profile);
+                MixF(r.MaxDepth);
+                Mix(Mathf.Max(0, r.X0 - wx0) - 1);
+                Mix(Mathf.Max(0, r.Z0 - wz0) - 1);
+                Mix(Mathf.Min(wx1 - wx0 - 1, r.X1 - wx0) + 1);
+                Mix(Mathf.Min(wz1 - wz0 - 1, r.Z1 - wz0) + 1);
+                Mix(r.Layers.Count);
+                foreach (var (threshold, cap) in r.Layers)
+                {
+                    MixF(threshold);
+                    MixF(cap);
+                }
+            }
+            Mix(wx0);
+            Mix(wz0);
+            Mix(wx1);
+            Mix(wz1);
+            var depth = g.Depth;
+            var ground = g.Ground;
+            for (var z = wz0; z < wz1; z++)
+            for (var x = wx0; x < wx1; x++)
+            {
+                var i = z * g.Width + x;
+                var l = _label[i];
+                if (l != 0 && _keyLabel[l] == 0)
+                {
+                    _keyLabel[l] = next++;
+                    _keyTouched.Add(l);
+                }
+                Mix(l == 0 ? 0 : _keyLabel[l]);
+                MixF(depth[i]);
+                MixF(ground[i]);
+            }
+            foreach (var l in _keyTouched) _keyLabel[l] = 0;
+
+            TileRect(tx, tz, _keyRect);
+            TileCuts(cuts, _keyRect, _keyCuts, _keyCutBounds);
+            Mix(_keyCuts.Count);
+            foreach (var cut in _keyCuts)
+            {
+                Mix(cut.Length);
+                foreach (var p in cut)
+                {
+                    MixF(p.x);
+                    MixF(p.y);
+                }
+            }
+            return h == 0 ? 1 : h;
+        }
 
         /// <summary>The grid-space x (or z) of the line between tile k − 1 and tile k. Tile lines run through texel
         /// CENTRES (an outline never runs along one: a drift boundary that follows texel borders never lies on a tile
