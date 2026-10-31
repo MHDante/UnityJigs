@@ -81,6 +81,91 @@ namespace UnityJigs.Geometry
             return true;
         }
 
+        /// <summary>How thin a triangle is: its longest edge squared over its area (an equilateral's is 2.3; infinity for no
+        /// area). A plan-view measure: scale doesn't change it.</summary>
+        public static float Thinness(Vector2 a, Vector2 b, Vector2 c)
+        {
+            var doubled = System.Math.Abs(Orient(a, b, c));
+            if (doubled <= 0d) return float.PositiveInfinity;
+            var longest = System.Math.Max(Length2(a, b), System.Math.Max(Length2(b, c), Length2(c, a)));
+            return (float)(2d * longest / doubled);
+        }
+
+        /// <summary>The thinness of triangle t.</summary>
+        public float ThinnessOf(int t) => Thinness(Points[Triangles[t * 3]], Points[Triangles[t * 3 + 1]], Points[Triangles[t * 3 + 2]]);
+
+        /// <summary>Splits inner edges, each at its middle and keeping the triangulation constrained Delaunay, until no triangle
+        /// is thinner than `limit` (<see cref="Thinness"/>) or `maxPoints` were added. Each split halves a needle's thinness.
+        /// A triangle whose thinness comes from an OUTLINE edge stays: the outline is never split here, and no inner point
+        /// can widen a triangle standing on it (<see cref="ThinOutlineEdges"/> names those edges). Returns the number of
+        /// points added.</summary>
+        public int RefineThin(float limit, int maxPoints)
+        {
+            var added = 0;
+            var progress = true;
+            while (progress && added < maxPoints)
+            {
+                progress = false;
+                for (var t = 0; t < TriangleCount && added < maxPoints; t++)
+                {
+                    if (ThinnessOf(t) <= limit) continue;
+                    var h = EdgeToSplit(t, limit);
+                    if (h < 0) continue;
+                    Vector2 a = Points[Triangles[h]], b = Points[Triangles[Next(h)]];
+                    var mid = (a + b) * 0.5f;
+                    if (mid == a || mid == b) continue;
+                    var v = Points.Count;
+                    Points.Add(mid);
+                    SplitEdge(h, v);
+                    Legalize();
+                    added++;
+                    progress = true;
+                }
+            }
+            return added;
+        }
+
+        /// <summary>The outline edges that make a triangle thinner than `limit`, each with that thinness. Triangles of no
+        /// area are left out: they carry nothing.</summary>
+        public void ThinOutlineEdges(float limit, List<(Vector2 a, Vector2 b, float thinness)> into)
+        {
+            for (var h = 0; h < Triangles.Count; h++)
+            {
+                if (_twin[h] >= 0) continue;
+                var t = h / 3;
+                var doubled = System.Math.Abs(Orient(Points[Triangles[t * 3]], Points[Triangles[t * 3 + 1]], Points[Triangles[t * 3 + 2]]));
+                if (doubled <= 0d) continue;
+                Vector2 a = Points[Triangles[h]], b = Points[Triangles[Next(h)]];
+                var thin = 2d * Length2(a, b) / doubled;
+                if (thin > limit) into.Add((a, b, (float)thin));
+            }
+        }
+
+        // The half-edge to split to widen thin triangle t: its longest. -1 when an outline edge of t is what makes it thin.
+        private int EdgeToSplit(int t, float limit)
+        {
+            Vector2 a = Points[Triangles[t * 3]], b = Points[Triangles[t * 3 + 1]], c = Points[Triangles[t * 3 + 2]];
+            var doubled = System.Math.Abs(Orient(a, b, c));
+            var best = -1;
+            var bestLength = -1d;
+            for (var k = 0; k < 3; k++)
+            {
+                var h = t * 3 + k;
+                var length = Length2(Points[Triangles[h]], Points[Triangles[Next(h)]]);
+                if (_twin[h] < 0 && 2d * length > limit * doubled) return -1;
+                if (_twin[h] < 0 || length <= bestLength) continue;
+                bestLength = length;
+                best = h;
+            }
+            return best;
+        }
+
+        private static double Length2(Vector2 a, Vector2 b)
+        {
+            double dx = (double)b.x - a.x, dy = (double)b.y - a.y;
+            return dx * dx + dy * dy;
+        }
+
         private void SplitTriangle(int t, int p)
         {
             int a = Triangles[t * 3], b = Triangles[t * 3 + 1], c = Triangles[t * 3 + 2];

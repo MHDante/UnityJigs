@@ -421,6 +421,30 @@ namespace UnityJigs.Geometry
             }
         }
 
+        /// <summary>Cuts these simplified edges (their end points, either way round) into this many equal pieces, the pieces
+        /// again when they are listed too: the same line with more points on it, shared by both sides. A <see cref="Simplify"/>
+        /// starts over without them.</summary>
+        public void SplitSimple(Dictionary<(Vector2 a, Vector2 b), int> pieces)
+        {
+            foreach (var chain in Chains)
+            {
+                var src = chain.Simple;
+                var changed = true;
+                while (changed)
+                {
+                    changed = false;
+                    var n = chain.Closed ? src.Count : src.Count - 1;
+                    for (var i = n - 1; i >= 0; i--)
+                    {
+                        Vector2 a = src[i], b = src[(i + 1) % src.Count];
+                        if (!pieces.TryGetValue((a, b), out var count) && !pieces.TryGetValue((b, a), out count)) continue;
+                        for (var k = count - 1; k >= 1; k--) src.Insert(i + 1, Vector2.Lerp(a, b, k / (float)count));
+                        changed = true;
+                    }
+                }
+            }
+        }
+
         // Douglas–Peucker between the pinned points (a closed chain starts at its first pin). False: none is pinned.
         private static bool SimplifyPinned(Chain chain, float eps, System.Func<Chain, int, bool> pin)
         {

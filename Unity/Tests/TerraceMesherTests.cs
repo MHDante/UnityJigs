@@ -440,6 +440,72 @@ namespace UnityJigs.Tests
             }
         }
 
+        private static int ThinTops(TerraceMesher.Part part, float limit)
+        {
+            var count = 0;
+            var v = part.Vertices;
+            var t = part.Triangles;
+            for (var i = 0; i < t.Count; i += 3)
+            {
+                Vector3 a = v[t[i]], b = v[t[i + 1]], c = v[t[i + 2]];
+                if (Vector3.Cross(b - a, c - a).y <= 0f) continue;
+                var thin = DelaunayMesh.Thinness(new Vector2(a.x, a.z), new Vector2(b.x, b.z), new Vector2(c.x, c.z));
+                if (thin > limit && !float.IsInfinity(thin)) count++;
+            }
+            return count;
+        }
+
+        // Earcut's fans in a long room with notches: with the limit, the same outline and area and no needle.
+        [Test]
+        public void ThinTopsAreWidenedWithTheSameOutline()
+        {
+            const int w = 400, h = 40;
+            var labels = new int[w * h];
+            for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+                labels[y * w + x] = x >= 396 && y >= 18 && y < 22 || x >= 395 && y >= 30 || x < 3 && y >= 20 && y < 25 ? 0 : 1;
+            var columns = Slab(0.1f);
+            TerraceMesher.Result Bake(float limit, out TerraceMesher.Part part, out TerraceGraph graph)
+            {
+                graph = TerraceGraph.Trace(labels, w, h, 0.25f, Vector2.zero);
+                var r = TerraceMesher.Build(graph, columns, 1, out var parts,
+                    new TerraceMesher.Options { Roughness = 0.3f, MaxTopThinness = limit });
+                part = parts[0];
+                return r;
+            }
+            Bake(0f, out var before, out var graphBefore);
+            Assert.Greater(ThinTops(before, 400f), 0, "earcut alone leaves needles here, or this checks nothing");
+            var after = Bake(400f, out var part, out var graphAfter);
+            Assert.IsTrue(after.Success);
+            Assert.AreEqual(0, after.ThinTops);
+            Assert.AreEqual(0, ThinTops(part, 400f));
+            Assert.Less(after.ThinnestTop, 400.001f);
+            Assert.AreEqual(0, after.ThinEdgesSplit, "nothing here needs an outline point");
+            Assert.AreEqual(w * h * 0.0625f - (4 * 4 + 5 * 10 + 3 * 5) * 0.0625f, after.TopArea, 1e-2f);
+            Assert.AreEqual(graphBefore.Chains.Count, graphAfter.Chains.Count);
+            for (var i = 0; i < graphBefore.Chains.Count; i++)
+                CollectionAssert.AreEqual(graphBefore.Chains[i].Simple, graphAfter.Chains[i].Simple, $"chain {i}");
+        }
+
+        // A triangle standing on a long outline edge can't be widened from inside: the edge gets points, on its line.
+        [Test]
+        public void ALongStripKeepsItsLinesAndLosesItsNeedles()
+        {
+            const int w = 600, h = 6;
+            var labels = new int[w * h];
+            for (var x = 0; x < w; x++) labels[2 * w + x] = labels[3 * w + x] = 1;
+            var graph = TerraceGraph.Trace(labels, w, h, 0.25f, Vector2.zero);
+            var r = TerraceMesher.Build(graph, Slab(0.1f), 1, out var parts,
+                new TerraceMesher.Options { Roughness = 0.3f, MaxTopThinness = 400f });
+            Assert.IsTrue(r.Success);
+            Assert.Greater(r.ThinEdgesSplit, 0);
+            Assert.AreEqual(0, r.ThinTops);
+            Assert.AreEqual(0, ThinTops(parts[0], 400f));
+            Assert.AreEqual(75f, r.TopArea, 1e-3f);
+            foreach (var v in parts[0].Vertices)
+                Assert.IsTrue(Mathf.Abs(v.z - 0.5f) < 1e-3f || Mathf.Abs(v.z - 1f) < 1e-3f, $"{v} is off the strip's lines");
+        }
+
         [Test]
         public void PartsBecomeSubmeshes()
         {

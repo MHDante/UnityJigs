@@ -69,7 +69,7 @@ namespace UnityJigs.Geometry
     /// area that border one other label only are dropped (that label takes the area).
     /// <para>A grid with one non-empty label whose column is one slice [−thickness, 0] gives exactly
     /// <see cref="MaskMesher"/>'s slab (same vertices, same order).</para>
-    /// <para>Options add: per-border simplification scale and long-edge splitting, a wall-hiding rule, skirts, a per-vertex
+    /// <para>Options add: thin triangles mended on every top (<see cref="Options.MaxTopThinness"/>), per-border simplification scale and long-edge splitting, a wall-hiding rule, skirts, a per-vertex
     /// LIFT (sloped tops — chamfers: the top's height then varies across a region, walls follow it at each end, normals
     /// are the faces'), and per-vertex extra data (uv1 = position + offset, uv2 from a callback) on chosen parts.</para>
     /// </summary>
@@ -154,6 +154,15 @@ namespace UnityJigs.Geometry
             public Vector3 Uv1Offset;
             public Func<VertexContext, Vector4>? Uv2;
 
+            /// <summary>The thinnest a top's triangle may be: longest edge squared over area (<see cref="DelaunayMesh.Thinness"/>;
+            /// 0 = earcut's triangles as they come, MaskMesher's exact faces). Every top's T-junctions are repaired, it is made
+            /// constrained Delaunay, and what is still thinner gets inner points. Same outline, same surface. Earcut's fans
+            /// leave needles tens of metres long, and a body resting on one can lose its contact with it. A triangle standing
+            /// on a long outline edge with a point of the outline just off that edge can't be widened from inside: only that
+            /// edge gets points of its own, on its line, shared with the region across (<see cref="Result.ThinEdgesSplit"/>).
+            /// What still can't be mended is counted in <see cref="Result.ThinTops"/>.</summary>
+            public float MaxTopThinness;
+
             /// <summary>Stops a build running off the main thread (between roughness tries and between regions).</summary>
             public System.Threading.CancellationToken Cancel;
         }
@@ -175,6 +184,13 @@ namespace UnityJigs.Geometry
             /// <summary>Lifted regions whose refinement stopped at its vertex budget (never expected; such a top is
             /// coarser than RefineLifted asks).</summary>
             public int RefinesCapped;
+            /// <summary>With <see cref="Options.MaxTopThinness"/>: the top triangles still over it, the thinnest of all, one of
+            /// their corners to find them by (mesh space: x, z), the inner points added and the outline edges split.</summary>
+            public int ThinTops;
+            public float ThinnestTop;
+            public Vector2 ThinTopAt;
+            public int ThinPoints;
+            public int ThinEdgesSplit;
         }
 
         /// <summary>One output part's faces (a mesh, or a submesh of one).</summary>
@@ -324,7 +340,7 @@ namespace UnityJigs.Geometry
             while (true)
             {
                 options.Cancel.ThrowIfCancellationRequested();
-                if (TryBuild(graph, eps, minArea, options, out regions, ref result)) break;
+                if (TryBuild(graph, eps, minArea, options, null, out regions, ref result)) break;
                 if (eps <= 0f)
                 {
                     result.Success = false;
@@ -335,7 +351,39 @@ namespace UnityJigs.Geometry
             result.Roughness = eps;
             var writer = new Writer(columns, parts, options);
             writer.Write(regions!);
+            // Outline edges that make a top too thin: the same lines with more points, and everything is written again.
+            Dictionary<(Vector2 a, Vector2 b), int>? splits = null;
+            for (var round = 0; round < MaxSplitRounds && writer.ThinOutline.Count > 0; round++)
+            {
+                splits ??= new Dictionary<(Vector2 a, Vector2 b), int>();
+                var before = splits.Count;
+                foreach (var (a, b, thin) in writer.ThinOutline)
+                    if (!splits.ContainsKey((a, b)) && !splits.ContainsKey((b, a)))
+                        splits.Add((a, b), Mathf.Clamp(Mathf.CeilToInt(thin / options.MaxTopThinness), 2, 64));
+                if (splits.Count == before) break;
+                options.Cancel.ThrowIfCancellationRequested();
+                if (!TryBuild(graph, eps, minArea, options, splits, out regions, ref result))
+                {
+                    // (More points on the same lines shouldn't cross anything.) Without them, then: the count reports it.
+                    if (!TryBuild(graph, eps, minArea, options, null, out regions, ref result))
+                    {
+                        result.Success = false;
+                        return result;
+                    }
+                    splits.Clear();
+                    round = MaxSplitRounds;
+                }
+                for (var i = 0; i < partCount; i++)
+                    parts[i] = new Part { HasUv12 = options.PartHasUv12 != null && options.PartHasUv12(i) };
+                writer = new Writer(columns, parts, options);
+                writer.Write(regions!);
+            }
+            result.ThinEdgesSplit = splits?.Count ?? 0;
             result.RefinesCapped = writer.RefinesCapped;
+            result.ThinTops = writer.ThinTops;
+            result.ThinnestTop = writer.ThinnestTop;
+            result.ThinTopAt = writer.ThinTopAt;
+            result.ThinPoints = writer.ThinPoints;
             foreach (var p in parts)
             {
                 p.Finish();
@@ -356,11 +404,12 @@ namespace UnityJigs.Geometry
         }
 
         private static bool TryBuild(TerraceGraph graph, float eps, float minArea, Options options,
-            out List<Region>? regions, ref Result result)
+            Dictionary<(Vector2 a, Vector2 b), int>? splits, out List<Region>? regions, ref Result result)
         {
             regions = null;
             foreach (var c in graph.Chains) c.Dropped = false;
             graph.Simplify(eps, options.RoughnessScale, options.MaxEdge, options.Pin, options.CornerMargin);
+            if (splits != null) graph.SplitSimple(splits);
             var labels = graph.Labels();
 
             // Loops that collapse (< 3 points, or under the minimum area) and border one other label only are dropped:
@@ -438,6 +487,9 @@ namespace UnityJigs.Geometry
 
         private static readonly TerraceSlice[] NoSlices = new TerraceSlice[0];
 
+        // Tries at mending what outline edges make too thin (a piece of an edge can still be too long for a nearer point).
+        private const int MaxSplitRounds = 4;
+
         // A wall end shorter than this (metres) has shrunk to nothing.
         private const float MinWall = 1e-4f;
 
@@ -448,7 +500,10 @@ namespace UnityJigs.Geometry
             private readonly Options _o;
             private readonly List<(float lo, float hi)> _a = new(), _b = new();
             private DelaunayMesh? _delaunay;
-            public int RefinesCapped;
+            public int RefinesCapped, ThinTops, ThinPoints;
+            public readonly List<(Vector2 a, Vector2 b, float thin)> ThinOutline = new();
+            public float ThinnestTop;
+            public Vector2 ThinTopAt;
 
             public Writer(IReadOnlyList<TerraceSlice[]?> columns, Part[] parts, Options options)
             {
@@ -475,24 +530,24 @@ namespace UnityJigs.Geometry
                 {
                     _o.Cancel.ThrowIfCancellationRequested();
                     var column = ColumnOf(region.Label);
+                    var lifted = false;
                     if (_o.Lift != null && (_o.RefineLifted > 0f || _o.LiftTolerance > 0f))
-                    {
-                        var lifted = false;
                         foreach (var slice in column)
                             lifted |= (slice.Flags & (TerraceSliceFlags.LiftTop | TerraceSliceFlags.LiftBottom)) != 0;
-                        if (lifted) Refine(region);
-                        // A flat neighbour must meet a lifted top's points too: earcut leaves points of a straight
-                        // line off its edges, and on a diagonal, where rounding moves them off the line, that opens a crack.
-                        else if (_o.LiftTolerance > 0f)
-                        {
-                            RepairTJunctions(region, 1f);
-                            var d = _delaunay ??= new DelaunayMesh();
-                            d.Reset(region.Vertices, region.Triangles); // (flips away what the repair leaves at zero area)
-                            d.MakeDelaunay();
-                            region.Triangles.Clear();
-                            region.Triangles.AddRange(d.Triangles);
-                        }
+                    if (lifted) Refine(region);
+                    // A flat neighbour must meet a lifted top's points too: earcut leaves points of a straight line off its
+                    // edges, and on a diagonal, where rounding moves them off the line, that opens a crack. And earcut's
+                    // needles are what MaxTopThinness is there to remove.
+                    else if (_o.Lift != null && _o.LiftTolerance > 0f || _o.MaxTopThinness > 0f)
+                    {
+                        RepairTJunctions(region, 1f);
+                        var d = _delaunay ??= new DelaunayMesh();
+                        d.Reset(region.Vertices, region.Triangles); // (flips away what the repair leaves at zero area)
+                        d.MakeDelaunay();
+                        region.Triangles.Clear();
+                        region.Triangles.AddRange(d.Triangles);
                     }
+                    if (_o.MaxTopThinness > 0f) Widen(region);
                     foreach (var slice in column)
                     {
                         if ((slice.Flags & TerraceSliceFlags.Skirt) != 0) continue;
@@ -593,6 +648,38 @@ namespace UnityJigs.Geometry
                 var budget = v.Count + 16 + Mathf.CeilToInt(Mathf.Min(8f * area / (max * max), 1e6f));
                 TriangleRefine.Refine(v, t, max, budget);
                 if (v.Count >= budget) RefinesCapped++;
+            }
+
+            // What is still over MaxTopThinness gets inner points (DelaunayMesh.RefineThin), at most as many again as the
+            // region has and 256 more; what can't be mended is counted.
+            private void Widen(Region region)
+            {
+                var d = _delaunay ??= new DelaunayMesh();
+                d.Reset(region.Vertices, region.Triangles);
+                var limit = _o.MaxTopThinness;
+                var budget = region.Vertices.Count + 256;
+                var added = d.RefineThin(limit, budget);
+                ThinPoints += added;
+                if (added >= budget) RefinesCapped++;
+                if (added > 0)
+                {
+                    region.Vertices.Clear();
+                    region.Vertices.AddRange(d.Points);
+                    region.Triangles.Clear();
+                    region.Triangles.AddRange(d.Triangles);
+                }
+                d.ThinOutlineEdges(limit, ThinOutline);
+                for (var t = 0; t < d.TriangleCount; t++)
+                {
+                    var thin = d.ThinnessOf(t);
+                    if (float.IsInfinity(thin)) continue; // no area: it carries nothing
+                    if (thin > ThinnestTop)
+                    {
+                        ThinnestTop = thin;
+                        if (thin > limit) ThinTopAt = d.Points[d.Triangles[t * 3]];
+                    }
+                    if (thin > limit) ThinTops++;
+                }
             }
 
             // Earcut drops zero-area ears, so points can be missing from an edge: a run of collinear outline points (a
