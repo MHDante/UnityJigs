@@ -7,8 +7,8 @@ namespace UnityJigs.Geometry
 {
     /// <summary>
     /// The input of <see cref="SnowMesher"/>: snow on a grid of square texels (row by row from <see cref="Min"/>, x then
-    /// z). <see cref="Depth"/> is the depth that defines the snow — its <see cref="SnowMesher.Settings.MinDepth"/>
-    /// contour is the drawn outline, so pass the same (smoothed) depth the game reads, and drawn edge = gameplay edge;
+    /// z). <see cref="Depth"/> defines the snow — its <see cref="SnowMesher.Settings.MinDepth"/> contour is the drawn
+    /// outline; <see cref="Heights"/>, when given, is how deep the drawn snow stands (without it, Depth is both);
     /// <see cref="Ground"/> is the height the snow stands on. Output positions are in this grid's space: x/z = Min +
     /// texel × CellSize, y = Ground + snow.
     /// </summary>
@@ -20,8 +20,14 @@ namespace UnityJigs.Geometry
         /// <summary>The corner of texel (0, 0).</summary>
         public Vector2 Min;
 
-        /// <summary>Snow depth per texel, metres.</summary>
+        /// <summary>The outline's field per texel: snow where it is at least MinDepth, its contour there the outline
+        /// (linear between texel centres). Snow depth in metres when <see cref="Heights"/> is null; with Heights it may be
+        /// any field (below zero too).</summary>
         public readonly float[] Depth;
+
+        /// <summary>The depth the drawn snow stands for per texel, metres, or null (Depth). The outline never reads it; the
+        /// walls, the top and the tiers do.</summary>
+        public float[]? Heights;
 
         /// <summary>The ground under the snow per texel, metres (output y).</summary>
         public readonly float[] Ground;
@@ -82,9 +88,9 @@ namespace UnityJigs.Geometry
             /// <summary>Outline loops smaller than this (m²) are dropped.</summary>
             public float MinLoopArea = 0.1f;
 
-            /// <summary>How far the outline may stray from the depth contour when it drops contour points (metres; the
-            /// contour of a depth stored in whole centimetres zig-zags by about a centimetre).</summary>
-            public float OutlineTolerance = 0.025f;
+            /// <summary>How far the outline may stray from the contour when it drops contour points (metres); half of it
+            /// is also the most each of the two smoothing passes moves a point.</summary>
+            public float OutlineTolerance = 0.01f;
 
             /// <summary>The lumps' noise reads (rotate by NoiseYaw, then add NoiseOffset) of the grid position: give the
             /// position in a frame shared by the neighbouring grids so the lumps agree across their seams.</summary>
@@ -175,6 +181,7 @@ namespace UnityJigs.Geometry
 
             int w = grid.Width, h = grid.Height, n = w * h;
             var depth = grid.Depth;
+            var heights = grid.Heights ?? grid.Depth;
             var ground = grid.Ground;
             var minDepth = settings.MinDepth;
             var step = settings.LevelStep + 1e-4f;
@@ -261,7 +268,7 @@ namespace UnityJigs.Geometry
                 }
                 _label[i] = l;
                 var r = _regions[l];
-                if (depth[i] > r.MaxDepth) r.MaxDepth = depth[i];
+                if (heights[i] > r.MaxDepth) r.MaxDepth = heights[i];
                 int x = i % w, z = i / w;
                 if (x < r.X0) r.X0 = x;
                 if (x > r.X1) r.X1 = x;
@@ -547,6 +554,7 @@ namespace UnityJigs.Geometry
             Mix(wz1);
             // The window's texels (the bulk of the key's cost: FNV written out, no call per texel).
             var depth = g.Depth;
+            var heights = g.Heights;
             var ground = g.Ground;
             var label = _label;
             var keyLabel = _keyLabel;
@@ -568,10 +576,12 @@ namespace UnityJigs.Geometry
                             numbered = keyLabel[l] = next++;
                             _keyTouched.Add(l);
                         }
-                        if (depth[i] > keyMax[l]) keyMax[l] = depth[i];
+                        var drawn = heights != null ? heights[i] : depth[i];
+                        if (drawn > keyMax[l]) keyMax[l] = drawn;
                     }
                     hash = (hash ^ (uint)numbered) * prime;
                     hash = (hash ^ (uint)BitConverter.SingleToInt32Bits(depth[i])) * prime;
+                    if (heights != null) hash = (hash ^ (uint)BitConverter.SingleToInt32Bits(heights[i])) * prime;
                     hash = (hash ^ (uint)BitConverter.SingleToInt32Bits(ground[i])) * prime;
                 }
             }
@@ -587,7 +597,8 @@ namespace UnityJigs.Geometry
                 Mix(Mathf.Min(wz1 - wz0 - 1, r.Z1 - wz0) + 1);
                 foreach (var (threshold, cap) in r.Layers)
                 {
-                    if (threshold > deepest) continue; // no texel here reaches it: BuildLayer traces nothing
+                    // No texel here reaches a tier: BuildLayer traces nothing (the bottom layer traces Depth, not Heights).
+                    if (threshold > deepest && threshold != s.MinDepth) continue;
                     MixF(threshold);
                     MixF(cap >= deepest ? float.PositiveInfinity : cap);
                     _profiles[r.Profile].RingsFor(Mathf.Min(r.MaxDepth, cap), out var wallRings, out var shoulderRings);
@@ -645,7 +656,7 @@ namespace UnityJigs.Geometry
             var c = g.CellSize;
             var spread = Mathf.Max(1, Mathf.RoundToInt(1f / c));
             var step = _settings.LevelStep + 1e-4f;
-            var depth = g.Depth;
+            var depth = g.Heights ?? g.Depth;
             var ground = g.Ground;
             var label = _label;
 
@@ -818,6 +829,7 @@ namespace UnityJigs.Geometry
 
         private int _layerLabel;
         private float _layerCap;
+        private float[] _layerField = Array.Empty<float>(); // what this layer's threshold is a contour of
         private SnowProfile _p;
         private float _layerReach;
         private int _R, _wallRings, _shoulderRings;
@@ -827,6 +839,7 @@ namespace UnityJigs.Geometry
             var sw = Stopwatch.StartNew();
             _layerLabel = label;
             _layerCap = cap;
+            _layerField = threshold == _settings.MinDepth ? _grid.Depth : _grid.Heights ?? _grid.Depth;
             _p = _profiles[region.Profile];
             _layerReach = _reach[region.Profile];
             _p.RingsFor(Mathf.Min(region.MaxDepth, cap), out _wallRings, out _shoulderRings);
@@ -876,7 +889,7 @@ namespace UnityJigs.Geometry
         {
             if (wx < 0 || wz < 0 || wx >= _ww || wz >= _wh) return false;
             var gi = Gi(wx, wz);
-            return _label[gi] == _layerLabel && _grid.Depth[gi] >= threshold;
+            return _label[gi] == _layerLabel && _layerField[gi] >= threshold;
         }
 
         private void Trace(Region region, float threshold)
@@ -1001,9 +1014,8 @@ namespace UnityJigs.Geometry
             _crossKey.Clear();
         }
 
-        // Two 1-2-1 passes over the contour points: the contour of a depth stored in whole centimetres zig-zags by about a
-        // centimetre, which would serrate the silhouette and jitter the normals. Each pass moves a point at most half the
-        // OutlineTolerance; local, so every window agrees.
+        // Two 1-2-1 passes over the contour points: a contour's zig-zag would serrate the silhouette and jitter the normals.
+        // Each pass moves a point at most half the OutlineTolerance; local, so every window agrees.
         private void Smooth(int start, int count)
         {
             if (count < 4) return;
@@ -1097,7 +1109,7 @@ namespace UnityJigs.Geometry
                 int x = i + (k == 1 || k == 2 ? 1 : 0), z = j + (k >= 2 ? 1 : 0);
                 if (x < 0 || z < 0 || x >= _ww || z >= _wh) continue;
                 var gi = Gi(x, z);
-                if (_label[gi] == _layerLabel || _label[gi] == 0) s += _grid.Depth[gi];
+                if (_label[gi] == _layerLabel || _label[gi] == 0) s += _layerField[gi];
             }
             return s * 0.25f >= threshold;
         }
@@ -1130,7 +1142,7 @@ namespace UnityJigs.Geometry
                 if (l != _layerLabel && l != 0) return -1;
                 if (float.IsNaN(g0)) g0 = g.Ground[gi];
                 else if (Mathf.Abs(g.Ground[gi] - g0) > _settings.LevelStep + 1e-4f) return -1;
-                var vk = g.Depth[gi] - threshold;
+                var vk = _layerField[gi] - threshold;
                 if (k == 0) v0 = vk;
                 else if (k == 1) v1 = vk;
                 else if (k == 2) v2 = vk;
@@ -1197,7 +1209,7 @@ namespace UnityJigs.Geometry
             if (gbx < 0 || gbz < 0 || gbx >= g.Width || gbz >= g.Height)
             {
                 // Past the grid's own edge the field reads no snow: its contour runs between the last texel and nothing.
-                var va = g.Depth[ia] - threshold;
+                var va = _layerField[ia] - threshold;
                 t = Mathf.Clamp(va / (va + threshold), 0.05f, 0.95f);
             }
             else if (!outside)
@@ -1207,8 +1219,8 @@ namespace UnityJigs.Geometry
                 var lb = _label[ib];
                 if (sameLevel && (lb == _layerLabel || lb == 0))
                 {
-                    var va = g.Depth[ia] - threshold;
-                    var vb = g.Depth[ib] - threshold;
+                    var va = _layerField[ia] - threshold;
+                    var vb = _layerField[ib] - threshold;
                     t = vb < va ? Mathf.Clamp(va / (va - vb), 0.05f, 0.95f) : 0.5f;
                 }
                 if (sameLevel) foot = Mathf.Min(foot, g.Ground[ib]);

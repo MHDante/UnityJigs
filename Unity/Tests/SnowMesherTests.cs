@@ -67,6 +67,71 @@ namespace UnityJigs.Tests
             return g;
         }
 
+        // The grid of a disc whose outline field is its own (Depth: MinDepth at radius r, linear), standing `height` deep.
+        private static SnowGrid Soft(float r, float height, float min = 0.02f)
+        {
+            const int n = 64;
+            var g = new SnowGrid(n, n) { CellSize = Cell, Min = Vector2.zero, Heights = new float[n * n], Paint = new float[n * n] };
+            var c = Vector2.one * (n * Cell * 0.5f);
+            for (var z = 0; z < n; z++)
+            for (var x = 0; x < n; x++)
+            {
+                var i = z * n + x;
+                var d = (new Vector2((x + 0.5f) * Cell, (z + 0.5f) * Cell) - c).magnitude;
+                g.Depth[i] = min + (r - d) * 0.5f; // below zero far out: only the contour counts
+                g.Heights![i] = height;
+                g.Paint![i] = d <= r ? height : 0f;
+            }
+            return g;
+        }
+
+        private static float MaxY(SnowMesher m)
+        {
+            var top = 0f;
+            foreach (var v in m.Vertices) top = Mathf.Max(top, v.y);
+            return top;
+        }
+
+        [Test]
+        public void Heights_SetTheDrawnDepthAndNotTheOutline()
+        {
+            var low = new SnowMesher();
+            low.Prepare(Soft(2f, 0.2f), Profiles, new SnowMesher.Settings());
+            low.BuildTile(0, 0);
+            var lowOutline = new List<Vector2>(low.OutlinePoints);
+            var lowTop = MaxY(low);
+            var lowKey = low.TileKey(0, 0);
+            var high = new SnowMesher();
+            high.Prepare(Soft(2f, 0.6f), Profiles, new SnowMesher.Settings());
+            high.BuildTile(0, 0);
+            CollectionAssert.AreEqual(lowOutline, high.OutlinePoints, "the outline reads Depth, never Heights");
+            Assert.Greater(lowOutline.Count, 8);
+            Assert.AreEqual(0.2f, lowTop, 0.05f, "the low disc stands at its Heights");
+            Assert.AreEqual(0.6f, MaxY(high), 0.1f, "the high disc stands at its Heights");
+            Assert.AreNotEqual(lowKey, high.TileKey(0, 0), "a change of Heights alone changes the tile's key");
+            Assert.AreEqual(0, high.Stats.Crossings);
+        }
+
+        [Test]
+        public void Heights_EqualToDepth_DrawLikeNoHeights()
+        {
+            var plain = Blobs(128, 128, 11, 1.2f, false, false);
+            var same = Blobs(128, 128, 11, 1.2f, false, false);
+            same.Heights = (float[])same.Depth.Clone();
+            var a = new SnowMesher();
+            a.Prepare(plain, Profiles, new SnowMesher.Settings());
+            var b = new SnowMesher();
+            b.Prepare(same, Profiles, new SnowMesher.Settings());
+            for (var z = 0; z < a.TilesZ; z++)
+            for (var x = 0; x < a.TilesX; x++)
+            {
+                a.BuildTile(x, z);
+                b.BuildTile(x, z);
+                CollectionAssert.AreEqual(a.Vertices, b.Vertices);
+                CollectionAssert.AreEqual(a.Triangles, b.Triangles);
+            }
+        }
+
         // Random drifts: discs of 0.2–maxDepth m, some with a deeper core, random shapes, optionally on steps.
         private static SnowGrid Blobs(int w, int h, int seed, float maxDepth, bool shapes, bool steps)
         {
@@ -175,7 +240,9 @@ namespace UnityJigs.Tests
                 }
             }
             Debug.Log($"SnowMesher outline vs field: {samples} disagreeing samples, all within {worst * 1000f:F1} mm of the outline");
-            Assert.LessOrEqual(worst, settings.OutlineTolerance + 0.025f);
+            // The tolerance + 3 cm: this grid's depth is in whole centimetres (its contour zig-zags) and a crossing stays 5% of a
+            // cell from a texel centre.
+            Assert.LessOrEqual(worst, settings.OutlineTolerance + 0.03f);
         }
 
         [Test]

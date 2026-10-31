@@ -66,7 +66,7 @@ namespace UnityJigs.Geometry
         /// <summary>The painted-snow default: matches the Blender snow blobs (a leaning, tucked base, a long soft dome).</summary>
         public static SnowProfile Marshmallow => new()
         {
-            Draws = true, Wall = 0.5f, WallAngle = 112f, Bulge = 0.04f, Shoulder = 5f, ShoulderMin = 0.05f,
+            Draws = true, Wall = 0.7f, WallAngle = 112f, Bulge = 0.04f, Shoulder = 5f, ShoulderMin = 0.05f,
             ShoulderMax = 1.5f, Puff = 0.08f, PuffReach = 3f, Lumps = 0.05f, LumpScale = 5f, Spacing = 0.7f, WallRings = 3,
             ShoulderRings = 5, RingStep = 0.2f, CapEdge = 1.5f, TierStep = 0.15f,
         };
