@@ -128,6 +128,27 @@ namespace UnityJigs.Geometry
             /// (<see cref="Result.RefinesCapped"/> counts the regions that reached it).</summary>
             public float RefineLifted;
 
+            /// <summary>Instead of RefineLifted's fixed edge length: a lifting label's top is refined only where its flat
+            /// triangles miss the lift by more than this, metres (TriangleRefine.RefineToHeight; 0 = not), or are steeper than
+            /// LiftMaxAngle. A plane stays two triangles.</summary>
+            public float LiftTolerance;
+
+            /// <summary>With LiftTolerance: no new edge under this, metres.</summary>
+            public float LiftMinEdge = 0.25f;
+
+            /// <summary>With LiftTolerance: the steepest a lifted triangle may be, degrees (0 = no limit).</summary>
+            public float LiftMaxAngle;
+
+            /// <summary>Lifted faces further apart than this, degrees, don't share a normal at a vertex: the crease stays a
+            /// crease, instead of smearing along whatever long triangles meet there (0 = all smooth).</summary>
+            public float LiftCreaseAngle;
+
+            /// <summary>Points of the traced lines always kept by the simplification (chain, index into its Points).</summary>
+            public Func<TerraceGraph.Chain, int, bool>? Pin;
+
+            /// <summary>Per border (left label, right label): a point this far from each of its corners (0 = none).</summary>
+            public Func<int, int, float>? CornerMargin;
+
             /// <summary>Parts that carry uv1 (position + Uv1Offset) and uv2 (this callback): the rest carry neither.</summary>
             public Func<int, bool>? PartHasUv12;
             public Vector3 Uv1Offset;
@@ -339,7 +360,7 @@ namespace UnityJigs.Geometry
         {
             regions = null;
             foreach (var c in graph.Chains) c.Dropped = false;
-            graph.Simplify(eps, options.RoughnessScale, options.MaxEdge);
+            graph.Simplify(eps, options.RoughnessScale, options.MaxEdge, options.Pin, options.CornerMargin);
             var labels = graph.Labels();
 
             // Loops that collapse (< 3 points, or under the minimum area) and border one other label only are dropped:
@@ -454,13 +475,24 @@ namespace UnityJigs.Geometry
                 {
                     _o.Cancel.ThrowIfCancellationRequested();
                     var column = ColumnOf(region.Label);
-                    if (_o.Lift != null && _o.RefineLifted > 0f)
+                    if (_o.Lift != null && (_o.RefineLifted > 0f || _o.LiftTolerance > 0f))
+                    {
+                        var lifted = false;
                         foreach (var slice in column)
-                            if ((slice.Flags & (TerraceSliceFlags.LiftTop | TerraceSliceFlags.LiftBottom)) != 0)
-                            {
-                                Refine(region);
-                                break;
-                            }
+                            lifted |= (slice.Flags & (TerraceSliceFlags.LiftTop | TerraceSliceFlags.LiftBottom)) != 0;
+                        if (lifted) Refine(region);
+                        // A flat neighbour must meet a lifted top's points too: earcut leaves points of a straight
+                        // line off its edges, and on a diagonal, where rounding moves them off the line, that opens a crack.
+                        else if (_o.LiftTolerance > 0f)
+                        {
+                            RepairTJunctions(region, 1f);
+                            var d = _delaunay ??= new DelaunayMesh();
+                            d.Reset(region.Vertices, region.Triangles); // (flips away what the repair leaves at zero area)
+                            d.MakeDelaunay();
+                            region.Triangles.Clear();
+                            region.Triangles.AddRange(d.Triangles);
+                        }
+                    }
                     foreach (var slice in column)
                     {
                         if ((slice.Flags & TerraceSliceFlags.Skirt) != 0) continue;
@@ -519,7 +551,7 @@ namespace UnityJigs.Geometry
             // ends in milliseconds.
             private void Refine(Region region)
             {
-                RepairTJunctions(region, _o.RefineLifted);
+                RepairTJunctions(region, _o.RefineLifted > 0f ? _o.RefineLifted : 1f);
                 var d = _delaunay ??= new DelaunayMesh();
                 d.Reset(region.Vertices, region.Triangles);
                 d.MakeDelaunay();
@@ -532,6 +564,30 @@ namespace UnityJigs.Geometry
                 {
                     Vector2 a = v[t[i]], b = v[t[i + 1]], c = v[t[i + 2]];
                     area += Mathf.Abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) * 0.5f;
+                }
+                if (_o.LiftTolerance > 0f)
+                {
+                    var limit = v.Count + 16 + Mathf.CeilToInt(Mathf.Min(8f * area / (_o.LiftMinEdge * _o.LiftMinEdge), 1e6f));
+                    var slope = _o.LiftMaxAngle > 0f ? Mathf.Tan(_o.LiftMaxAngle * Mathf.Deg2Rad) : 0f;
+                    var label = region.Label;
+                    if (TriangleRefine.RefineToHeight(v, t, p => Lift(label, p), _o.LiftTolerance, _o.LiftMinEdge, slope, limit) > 0)
+                    {
+                        // Well shaped again: a new point beside a long edge makes a sliver, and a sliver reads as steep.
+                        d.Reset(v, t);
+                        d.MakeDelaunay();
+                        t.Clear();
+                        t.AddRange(d.Triangles);
+                    }
+                    // What is still over the angle gets one more try, finer and allowed thinner: by slope alone.
+                    if (slope > 0f && TriangleRefine.RefineToHeight(v, t, p => Lift(label, p), 1000f, _o.LiftMinEdge * 0.5f, slope, limit, 0.2f) > 0)
+                    {
+                        d.Reset(v, t);
+                        d.MakeDelaunay();
+                        t.Clear();
+                        t.AddRange(d.Triangles);
+                    }
+                    if (v.Count >= limit) RefinesCapped++;
+                    return;
                 }
                 var max = _o.RefineLifted;
                 var budget = v.Count + 16 + Mathf.CeilToInt(Mathf.Min(8f * area / (max * max), 1e6f));
@@ -585,11 +641,13 @@ namespace UnityJigs.Geometry
                         if (!grid.TryGetValue(CellKey(x, y), out var list)) continue;
                         foreach (var p in list)
                         {
-                            if (p == pa || p == pb) continue;
+                            if (p == pa || p == pb || p == v[c]) continue; // (c on its own edge: a zero-area triangle, the flips' job)
                             var q = p - pa;
                             var along = Vector2.Dot(q, d);
                             if (along <= 0f || along >= len2) continue;
-                            if (Mathf.Abs(q.x * d.y - q.y * d.x) > 1e-6f * Mathf.Sqrt(len2)) continue; // off the line (> 1 µm)
+                            // Off the line by more than 0.1 mm. (Float rounding alone puts a point split along a diagonal a few µm
+                            // off it, tens of metres from the origin: such a point is on the line, and a crack if it's missed.)
+                            if (Mathf.Abs(q.x * d.y - q.y * d.x) > 1e-4f * Mathf.Sqrt(len2)) continue;
                             on.Add((along, p));
                         }
                     }
@@ -677,6 +735,11 @@ namespace UnityJigs.Geometry
                     }
                 }
                 if (!any) return;
+                if (_o.LiftCreaseAngle > 0f)
+                {
+                    CreasedNormals(s, part, at, top);
+                    return;
+                }
                 // Sloped somewhere: normals from the faces (Unity winding: clockwise seen from the front).
                 for (var i = at; i < s.N.Count; i++) s.N[i] = Vector3.zero;
                 for (var i = 0; i < tris.Count; i += 3)
@@ -690,6 +753,70 @@ namespace UnityJigs.Geometry
                 }
                 for (var i = at; i < s.N.Count; i++)
                     s.N[i] = s.N[i].sqrMagnitude > 1e-20f ? s.N[i].normalized : top ? Vector3.up : Vector3.down;
+            }
+
+            // Normals of a sloped cap from `at` on (its triangles are the section's last): at each vertex the faces within
+            // LiftCreaseAngle of one another share a normal (area-weighted), the others get a copy of the vertex.
+            private void CreasedNormals(Part.Section s, Part part, int at, bool top)
+            {
+                var first = s.Tris.Count;
+                while (first > 0 && s.Tris[first - 1] >= at) first--;
+                var cos = Mathf.Cos(_o.LiftCreaseAngle * Mathf.Deg2Rad);
+                var count = s.V.Count - at;
+                var faces = new List<int>?[count];
+                var normals = new Vector3[(s.Tris.Count - first) / 3];
+                for (var f = 0; f < normals.Length; f++)
+                {
+                    int i = first + f * 3;
+                    int a = s.Tris[i], b = s.Tris[i + 1], c = s.Tris[i + 2];
+                    normals[f] = Vector3.Cross(s.V[b] - s.V[a], s.V[c] - s.V[a]); // the section's winding faces out
+                    (faces[a - at] ??= new List<int>()).Add(f);
+                    (faces[b - at] ??= new List<int>()).Add(f);
+                    (faces[c - at] ??= new List<int>()).Add(f);
+                }
+                var fallback = top ? Vector3.up : Vector3.down;
+                var groups = new List<(Vector3 first, Vector3 sum, int index)>();
+                for (var v = 0; v < count; v++)
+                {
+                    var index = at + v;
+                    s.N[index] = fallback;
+                    if (faces[v] == null) continue;
+                    groups.Clear();
+                    foreach (var f in faces[v]!)
+                    {
+                        var n = normals[f];
+                        if (n.sqrMagnitude < 1e-20f) continue;
+                        var unit = n.normalized;
+                        var g = -1;
+                        for (var k = 0; k < groups.Count && g < 0; k++)
+                            if (Vector3.Dot(groups[k].first, unit) >= cos) g = k;
+                        if (g < 0)
+                        {
+                            var copy = index;
+                            if (groups.Count > 0)
+                            {
+                                copy = s.V.Count;
+                                s.V.Add(s.V[index]);
+                                s.N.Add(fallback);
+                                s.Uv.Add(s.Uv[index]);
+                                if (part.HasUv12)
+                                {
+                                    s.Uv1.Add(s.Uv1[index]);
+                                    s.Uv2.Add(s.Uv2[index]);
+                                }
+                            }
+                            groups.Add((unit, Vector3.zero, copy));
+                            g = groups.Count - 1;
+                        }
+                        var (u, sum, ind) = groups[g];
+                        groups[g] = (u, sum + n, ind);
+                        if (ind == index) continue;
+                        var t = first + f * 3;
+                        for (var j = 0; j < 3; j++)
+                            if (s.Tris[t + j] == index) s.Tris[t + j] = ind;
+                    }
+                    foreach (var (_, sum, ind) in groups) s.N[ind] = sum.normalized;
+                }
             }
 
             // The parts of [lo, hi] of `slice` no slice of the column across covers (that hides it) — at point p (lifts).

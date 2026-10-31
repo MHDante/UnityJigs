@@ -338,6 +338,27 @@ namespace UnityJigs.Tests
         }
 
         [Test]
+        public void ALiftedPlaneStaysCoarseAndAFoldedOneRefinesOnlyWhereItBends()
+        {
+            // 50 x 1 m of plane: no new point at all, however long. With a crease across it: points near the crease only.
+            var v = new List<Vector2> { new(0, 0), new(50, 0), new(50, 1), new(0, 1) };
+            var t = new List<int> { 0, 1, 2, 0, 2, 3 };
+            Assert.AreEqual(0, TriangleRefine.RefineToHeight(v, t, p => p.y * 0.125f, 0.01f, 0.25f, 0.176f, 1000));
+            Assert.AreEqual(2, t.Count / 3);
+            float Fold(Vector2 p) => p.y * 0.125f + Mathf.Max(0f, p.x - 25f) * 0.02f;
+            var added = TriangleRefine.RefineToHeight(v, t, Fold, 0.01f, 0.25f, 0f, 1000);
+            Assert.Greater(added, 0);
+            Assert.Less(added, 200, "refines all over, not near the bend");
+            var a = new Vector2[3];
+            for (var i = 0; i < t.Count; i += 3)
+            {
+                for (var k = 0; k < 3; k++) a[k] = v[t[i + k]];
+                var doubled = Mathf.Abs((a[1].x - a[0].x) * (a[2].y - a[0].y) - (a[1].y - a[0].y) * (a[2].x - a[0].x));
+                Assert.Greater(doubled, 1e-5f, "a zero-area triangle");
+            }
+        }
+
+        [Test]
         public void LiftedTopsHaveNoTJunctions()
         {
             // Random terraces with a two-cell band (a ramp) along every border of label 2 with label 1: holes, islands,

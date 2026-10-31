@@ -386,12 +386,20 @@ namespace UnityJigs.Geometry
         /// As above, each chain at `epsilon` × `scale(left, right)` (null = 1), then every simplified edge longer than
         /// `maxEdge(left, right)` (null or ≤ 0 = never) cut into equal pieces no longer than it (points on the edge).
         /// </summary>
-        public void Simplify(float epsilon, System.Func<int, int, float>? scale, System.Func<int, int, float>? maxEdge)
+        public void Simplify(float epsilon, System.Func<int, int, float>? scale, System.Func<int, int, float>? maxEdge) =>
+            Simplify(epsilon, scale, maxEdge, null, null);
+
+        /// <summary>As above; points `pin(chain, index into Points)` says are always kept (where what a line means changes
+        /// along it), and an edge also gets a point `cornerMargin(left, right)` metres from each of its ends that is a corner
+        /// (a chain's end, or a turn), so what happens at a corner stays near it whatever the edge's length.</summary>
+        public void Simplify(float epsilon, System.Func<int, int, float>? scale, System.Func<int, int, float>? maxEdge,
+            System.Func<Chain, int, bool>? pin, System.Func<int, int, float>? cornerMargin)
         {
             foreach (var chain in Chains)
             {
                 var eps = scale == null ? epsilon : epsilon * scale(chain.Left, chain.Right);
-                if (chain.Closed) PolygonSimplify.SimplifyClosed(chain.Points, eps, chain.Simple);
+                if (pin != null && eps > 0f && SimplifyPinned(chain, eps, pin)) { }
+                else if (chain.Closed) PolygonSimplify.SimplifyClosed(chain.Points, eps, chain.Simple);
                 else
                 {
                     var pts = chain.Points;
@@ -406,9 +414,89 @@ namespace UnityJigs.Geometry
                             if (keep[i]) chain.Simple.Add(pts[i]);
                     }
                 }
+                var margin = cornerMargin?.Invoke(chain.Left, chain.Right) ?? 0f;
+                if (margin > 0f) SplitAtCorners(chain, margin);
                 var max = maxEdge?.Invoke(chain.Left, chain.Right) ?? 0f;
                 if (max > 0f) SplitLong(chain, max);
             }
+        }
+
+        // Douglas–Peucker between the pinned points (a closed chain starts at its first pin). False: none is pinned.
+        private static bool SimplifyPinned(Chain chain, float eps, System.Func<Chain, int, bool> pin)
+        {
+            var src = chain.Points;
+            var first = -1;
+            for (var i = 0; i < src.Count && first < 0; i++)
+                if (pin(chain, i)) first = i;
+            if (first < 0) return false;
+            var pts = new List<Vector2>(src.Count + 1);
+            var pinned = new List<bool>(src.Count + 1);
+            var start = chain.Closed ? first : 0;
+            for (var i = 0; i < src.Count; i++)
+            {
+                var j = (start + i) % src.Count;
+                pts.Add(src[j]);
+                pinned.Add(pin(chain, j));
+            }
+            if (chain.Closed)
+            {
+                pts.Add(pts[0]); // the way round, back to the first pin
+                pinned.Add(true);
+            }
+            pinned[0] = pinned[pts.Count - 1] = true;
+            var keep = new bool[pts.Count];
+            var from = 0;
+            keep[0] = true;
+            for (var i = 1; i < pts.Count; i++)
+            {
+                if (!pinned[i]) continue;
+                keep[i] = true;
+                Recurse(pts, from, i, eps, keep);
+                from = i;
+            }
+            chain.Simple.Clear();
+            var count = chain.Closed ? pts.Count - 1 : pts.Count;
+            for (var i = 0; i < count; i++)
+                if (keep[i]) chain.Simple.Add(pts[i]);
+            return true;
+        }
+
+        // A turn of more than about 3° is a corner (points a split left on a straight line are not).
+        private static void SplitAtCorners(Chain chain, float margin)
+        {
+            var src = chain.Simple;
+            var count = src.Count;
+            if (count < 2) return;
+            bool Corner(int i)
+            {
+                if (!chain.Closed && (i == 0 || i == count - 1)) return true;
+                var into = (src[i] - src[(i + count - 1) % count]).normalized;
+                var outOf = (src[(i + 1) % count] - src[i]).normalized;
+                return Vector2.Dot(into, outOf) < 0.9986f;
+            }
+            var n = chain.Closed ? count : count - 1;
+            var result = new List<Vector2>(count * 2);
+            for (var i = 0; i < count; i++)
+            {
+                result.Add(src[i]);
+                if (i >= n) continue;
+                var a = src[i];
+                var b = src[(i + 1) % count];
+                var length = (b - a).magnitude;
+                if (length <= margin * 1.5f) continue;
+                var along = (b - a) / length;
+                var fromA = Corner(i);
+                var fromB = Corner((i + 1) % count);
+                if (fromA && fromB && length <= margin * 2.5f)
+                {
+                    result.Add((a + b) * 0.5f);
+                    continue;
+                }
+                if (fromA) result.Add(a + along * margin);
+                if (fromB) result.Add(b - along * margin);
+            }
+            src.Clear();
+            src.AddRange(result);
         }
 
         private static void SplitLong(Chain chain, float maxEdge)
