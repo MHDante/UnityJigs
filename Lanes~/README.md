@@ -44,6 +44,10 @@ repository (it finds the main checkout through git; or pass `-Repo <path>`).
    - **No free lane** (exit 3): don't take one. Show the user the table and ask which lane to free, or
      whether to create one (`lane.ps1 new <next letter>`: a few minutes and the Library's size on disk).
    - A held lane you asked for by name exits 2 and names its holder.
+   - You already hold another lane and asked for one by name: exit 4 (one lane per session; release yours first).
+     Asking again for the lane you hold, or for none, says which you hold and exits 0.
+   - Known issue: a refusal from the registry in a shape the script doesn't expect would print "Claimed lane" with
+     no lane name and exit 0. Not seen; read the claim's output, not only its exit code.
 3. **Read the lane's note**: with a registry (below) `lane.ps1 note <id>` (a claim prints it too); without one, its
    memory file (`lane_<id>-<machine>.md` in the repo's Claude memory folder, indexed in
    MEMORY.md: the folder Claude Code reads — `autoMemoryDirectory` when local or user settings set it, else
@@ -288,6 +292,13 @@ Nothing here is imposed on a repo: read it, then adapt. A typical setup:
    and `.gitattributes` lines sending Unity YAML to it (`*.prefab merge=unityyamlmerge eol=lf`, likewise
    `.unity`, `.asset`, `.meta`, `.mat`, `.anim`, `.controller` …). Merges then go field by field, and a real
    conflict gets ordinary git markers on just the conflicting lines.
+   **What a tool regenerates** needs no hand merge, and often can't have one (a mesh's vertex data is one line of
+   hex). Two attributes tell the driver: `unity-derived` on files a tool writes whole (`**/Baked/*.asset
+   unity-derived`), and `unity-derived-fields=A,B` on files where only those fields are regenerated (`*.unity
+   unity-derived-fields=BakeHash`). A conflict in a `unity-derived` file, or one whose conflicting lines are all
+   named fields, keeps ours there (every other change still merged) and exits clean, with a line saying what it
+   kept. That is right only when the tool notices: the project's own check must find the result out of date (a
+   hash over the inputs, say) and regenerate it. A conflict on any other field still gets markers.
 5. **Saves:** route the game's save folder through `Lane.SaveFolder` and editor save state through
    `Lane.Key`.
 6. **The git hooks** (`githooks/` beside this file; per clone, like the merge driver in step 4):

@@ -69,6 +69,19 @@ case $? in
     2)
         "$tool" merge -h -l --force --fallback none "$base" "$theirs" "$ours" "$tmp/theirs" > /dev/null 2>&1
         cp "$tmp/ours" "$ours"
+        # A conflict only in what a tool regenerates keeps ours: the whole file when it is derived (attribute
+        # unity-derived), or the named fields (attribute unity-derived-fields=A,B) when they are all that conflicts.
+        derived=$(git check-attr unity-derived -- "$path" | sed 's/.*: //')
+        fields=$(git check-attr unity-derived-fields -- "$path" | sed 's/.*: //')
+        case "$fields" in unspecified|unset|set|"") fields= ;; esac
+        # Each line where the two differ, as its key (the text before the first colon; a line with none, whole).
+        conflicting=$(diff "$tmp/ours" "$tmp/theirs" | sed -n 's/^[<>] *//p' | sed 's/:.*//' | sort -u)
+        others=$conflicting
+        for f in $(echo "$fields" | tr ',' ' '); do others=$(echo "$others" | grep -vx "$f"); done
+        if [ "$derived" = set ] || { [ -n "$fields" ] && [ -n "$conflicting" ] && [ -z "$others" ]; }; then
+            echo "unity-yaml-merge: $path: kept ours for $(echo $conflicting | tr ' ' ','), which a tool regenerates" >&2
+            exit 0
+        fi
         git merge-file -L ours -L base -L theirs "$ours" "$base" "$tmp/theirs"
         conflicts=$?
         echo "unity-yaml-merge: conflicts in $path:" >&2

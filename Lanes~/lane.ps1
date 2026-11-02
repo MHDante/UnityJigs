@@ -389,7 +389,11 @@ function Claim-Lane {
         $r = Registry-Post 'claim' @{ machine = $machine; lanes = $candidates; exact = [bool]$Requested; session = $Session; name = $Name; task = $Task }
         if ($r.already) {
             $m, $l = $r.already -split '/'
-            Write-Host "You already hold lane $($l.ToUpper())-$m$(if ($m -eq $machine) { ": $(Lane-Root $l)" })"; return
+            $held = "lane $($l.ToUpper())-$m$(if ($m -eq $machine) { ": $(Lane-Root $l)" })"
+            if ($Requested -and ($m -ne $machine -or $l -ne $Requested)) {
+                Write-Host "You already hold $held. One lane per session: release it before claiming lane $(Lane-Name $Requested)."; exit 4
+            }
+            Write-Host "You already hold $held"; return
         }
         if ($r.heldBy) { Write-Host "Lane $(Lane-Name $Requested) is held by $(Holder-Text $r.heldBy)"; exit 2 }
         if ($r.full) {
@@ -413,6 +417,9 @@ function Claim-Lane {
     }
     With-ClaimLock {
         $mine = Held-By $Session
+        if ($mine -and $Requested -and $mine -ne $Requested) {
+            Write-Host "You already hold lane $(Lane-Name $mine): $(Lane-Root $mine). One lane per session: release it before claiming lane $(Lane-Name $Requested)."; exit 4
+        }
         if ($mine) { Write-Host "You already hold lane $(Lane-Name $mine): $(Lane-Root $mine)"; return }
         $candidates = if ($Requested) { @($Requested) } else { $laneIds | Where-Object { Lane-Exists $_ } }
         foreach ($lane in $candidates) {
