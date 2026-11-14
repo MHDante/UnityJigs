@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Installs the git hooks beside this script into ONE clone (README "Setting up a repository", step 6):
-# into its shared git folder's hooks/ (`git rev-parse --git-common-dir`), so the clone's lane worktrees run
+# Installs the git hooks beside this script into ONE clone (README "The git hooks"):
+# into its shared git folder's hooks/ (`git rev-parse --git-common-dir`), so the clone's worktrees run
 # them too. Once per clone, like the merge driver; re-run after pulling a newer UnityJigs to refresh them.
 # Existing files that differ are kept as <name>.bak.<date>.
 #

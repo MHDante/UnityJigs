@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace UnityJigs.Lanes
 {
-    /// <summary>The lane this editor runs in (Lanes~/README.md): one checkout and one Unity editor each,
+    /// <summary>The lane this editor runs in (Git~/README.md): one checkout and one Unity editor each,
     /// so several agents can work in parallel. The main checkout is no lane; a git worktree in a folder
     /// named <c>&lt;repo&gt;-&lt;letter&gt;</c> (<c>my-game-b</c>) is lane B, and lanes B to J are numbered
     /// 1 to 9. Edit mode and editor play mode only: a build is never a lane.</summary>

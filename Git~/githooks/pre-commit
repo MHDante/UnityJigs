@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# pre-commit, installed per clone into its shared .git/hooks (and so its lane worktrees) by
-# UnityJigs Lanes~/githooks/install.sh.
+# pre-commit, installed per clone into its shared .git/hooks (and so its worktrees) by
+# UnityJigs Git~/githooks/install.sh.
 #
 # Blocks LOCAL "file:" Unity package references that point OUTSIDE the repository in
 # Packages/manifest.json or packages-lock.json: absolute ones ("file:D:/Clones/SomePackage") and relative

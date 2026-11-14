@@ -10,7 +10,7 @@ using UnityEngine.UIElements;
 
 namespace UnityJigs.Editor.Lanes
 {
-    /// <summary>Tells the editors of several lanes apart (Lanes~/README.md): "[Lane B · branch]" at the
+    /// <summary>Tells the editors of several lanes apart (Git~/README.md): "[Lane B · branch]" at the
     /// front of the window title (and so the taskbar), and, on Unity 6000.3+, a button in the lane's colour
     /// on the main toolbar. The main checkout shows neither. Click opens the lane's folder; right-click
     /// copies its project path for the Unity CLI (--project-path).</summary>

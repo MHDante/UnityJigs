@@ -3,7 +3,7 @@
 # .gitattributes names (e.g. "*.prefab merge=unityyamlmerge"). Install once per clone (the config is
 # shared by its worktrees; re-run to update after pulling a newer UnityJigs):
 #
-#     sh <UnityJigs>/Lanes~/unity-yaml-merge.sh --install
+#     sh <UnityJigs>/Git~/unity-yaml-merge.sh --install
 #
 # --install copies this script into the clone's git folder and points the driver at that copy, so the
 # repository needs no file of its own. Without the copy (a fresh clone), merges fall back to git's text
@@ -21,7 +21,7 @@
 if [ "$1" = "--install" ]; then
     common=$(git rev-parse --path-format=absolute --git-common-dir) || exit 1
     cp "$0" "$common/unity-yaml-merge.sh"
-    git config merge.unityyamlmerge.name "Unity SmartMerge (UnityJigs Lanes~/unity-yaml-merge.sh)"
+    git config merge.unityyamlmerge.name "Unity SmartMerge (UnityJigs Git~/unity-yaml-merge.sh)"
     # Runs from the top of the working tree; a clone without the copy gets a plain text merge.
     git config merge.unityyamlmerge.driver \
         'f="$(git rev-parse --path-format=absolute --git-common-dir)/unity-yaml-merge.sh"; if [ -f "$f" ]; then sh "$f" %O %A %B %P; else git merge-file -L ours -L base -L theirs %A %O %B; fi'

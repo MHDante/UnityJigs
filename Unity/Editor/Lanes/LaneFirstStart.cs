@@ -6,12 +6,12 @@ using UnityJigs.Lanes;
 
 namespace UnityJigs.Editor.Lanes
 {
-    /// <summary>Repairs what a Library copied from another checkout gets wrong (Lanes~/README.md "Seeding
+    /// <summary>Repairs what a Library copied from another checkout gets wrong (Git~/README.md "Seeding
     /// the Library"): the import records of some assemblies' scripts come stale, so every script of
     /// theirs resolves to no class (<c>MonoScript.GetClass()</c> null) until reimported. Assets of those
     /// classes then load as broken, and code that recreates a "missing" settings asset (FMOD) saves
-    /// defaults over it. Runs by itself once per Library in a lane, after the editor has loaded; the lane
-    /// script calls <see cref="Repair"/> too.</summary>
+    /// defaults over it. Runs by itself once per Library in a lane, after the editor has loaded; call
+    /// <see cref="Repair"/> from an eval for a Library that was opened before this ran.</summary>
     [InitializeOnLoad]
     public static class LaneFirstStart
     {
