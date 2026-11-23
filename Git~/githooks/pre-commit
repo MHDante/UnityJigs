@@ -39,8 +39,8 @@ for f in $(git ls-files '*Packages/manifest.json' '*Packages/packages-lock.json'
     bad=$(git show ":$f" 2>/dev/null | grep -nE '"file:[^"]*"' | while IFS= read -r line; do
         path=$(printf '%s\n' "$line" | sed -E 's/.*"file:([^"]*)".*/\1/')
         case "$path" in
-            [A-Za-z]:* | /* | \\*) printf '%s\n' "$line" ;;                        # absolute
-            *..*) outside_repo "$dir" "$path" && printf '%s\n' "$line" ;;          # climbs out of the repo?
+            ([A-Za-z]:* | /* | \\*) printf '%s\n' "$line" ;;                        # absolute
+            (*..*) outside_repo "$dir" "$path" && printf '%s\n' "$line" ;;          # climbs out of the repo?
         esac
     done)
     [ -z "$bad" ] && continue
